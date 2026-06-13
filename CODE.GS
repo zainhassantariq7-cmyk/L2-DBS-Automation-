@@ -59,14 +59,13 @@ var GRAPH_LAYOUT = {
   HEATMAP_SOURCE_ROW: 175,
   SUMMARY_ROW: 8,
   PRODUCTIVITY_ROW: 15,
-  ORDERS_CHART_ROW: 24,
-  ITEMS_CHART_ROW: 24,
-  SPEED_CHART_ROW: 45,
-  VARIANCE_ROW: 45,
-  SLA_ROW: 65,
-  PEAK_HOUR_ROW: 65,
-  PICKER_ROW: 78,
-  HEATMAP_ROW: 96
+  ORDERS_TABLE_ROW: 24,
+  ITEMS_TABLE_ROW: 24,
+  SPEED_TABLE_ROW: 53,
+  VARIANCE_ROW: 82,
+  SLA_ROW: 82,
+  PEAK_HOUR_ROW: 96,
+  PICKER_ROW: 105
 };
 
 const DASHBOARD_THEME = {
@@ -596,6 +595,7 @@ function updateDarkStoreDashboard() {
   var productivityRows = buildProductivityKpiRows_(dailyComparisonRows, hourlyRows, comparisonHourlyRows);
   var peakHourRows = buildPeakHourAnalysisRows_(hourlyRows, comparisonHourlyRows);
   var heatmapRows = buildHourlyHeatmapRows_(orderMatrix, itemMatrix, performanceRows);
+  var speedComparisonRows = buildHourlySpeedComparisonRows_(hourlyRows, comparisonHourlyRows);
 
   resetDashboardSheet_(graphsSheet);
   prepareDarkStoreDataSheet_(dataSheet);
@@ -605,13 +605,14 @@ function updateDarkStoreDashboard() {
   renderHeaderMetrics_(graphsSheet, latestDate, comparisonDate, dailyComparisonRows);
   renderDailyPerformanceSummary_(graphsSheet, dailySummaryRows);
   renderProductivityKpiCards_(graphsSheet, productivityRows);
-  renderDashboardChartsArea_(graphsSheet);
-  insertDashboardCharts_(graphsSheet, dataSheet, orderMatrix, itemMatrix, performanceRows);
+  renderDashboardComparisonSections_(graphsSheet);
+  renderHourlyMetricComparisonTable_(graphsSheet, GRAPH_LAYOUT.ORDERS_TABLE_ROW, 1, orderMatrix, "Orders");
+  renderHourlyMetricComparisonTable_(graphsSheet, GRAPH_LAYOUT.ITEMS_TABLE_ROW, 8, itemMatrix, "Items");
+  renderHourlySpeedComparisonTable_(graphsSheet, speedComparisonRows);
   renderVarianceAnalysisTable_(graphsSheet, dailyComparisonRows);
   renderSlaMonitor_(graphsSheet, dailyComparisonRows);
   renderPeakHourAnalysis_(graphsSheet, peakHourRows);
   renderTopPickerMtdRanking_(graphsSheet, mtdRows);
-  renderHourlyHeatmap_(graphsSheet, heatmapRows);
 }
 
 function resetDashboardSheet_(sheet) {
@@ -1001,18 +1002,14 @@ function renderProductivityKpiCards_(sheet, productivityRows) {
   renderKpiCards_(sheet, GRAPH_LAYOUT.PRODUCTIVITY_ROW, productivityRows, 3);
 }
 
-function renderDashboardChartsArea_(sheet) {
-  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.ORDERS_CHART_ROW - 2, 1, 7, "HOURLY ORDERS TREND | TODAY VS SAME DAY LAST WEEK", DASHBOARD_THEME.BLUE);
-  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.ITEMS_CHART_ROW - 2, 8, 7, "HOURLY ITEMS TREND | TODAY VS SAME DAY LAST WEEK", DASHBOARD_THEME.GREEN);
-  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.SPEED_CHART_ROW - 2, 1, 7, "HOURLY SPEED TREND | AT / PT / PKT / P95", DASHBOARD_THEME.WARNING);
-  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.VARIANCE_ROW - 2, 8, 7, "VARIANCE ANALYSIS TABLE", DASHBOARD_THEME.SECTION);
-  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.SLA_ROW - 2, 1, 6, "SLA MONITOR", DASHBOARD_THEME.ORANGE);
-  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.PEAK_HOUR_ROW - 2, 8, 7, "PEAK HOUR ANALYSIS", DASHBOARD_THEME.CYAN);
+function renderDashboardComparisonSections_(sheet) {
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.ORDERS_TABLE_ROW - 2, 1, 7, "HOURLY ORDERS COMPARISON", DASHBOARD_THEME.BLUE);
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.ITEMS_TABLE_ROW - 2, 8, 7, "HOURLY ITEMS COMPARISON", DASHBOARD_THEME.GREEN);
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.SPEED_TABLE_ROW - 2, 1, 14, "HOURLY SPEED COMPARISON", DASHBOARD_THEME.WARNING);
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.VARIANCE_ROW - 2, 1, 7, "VARIANCE ANALYSIS TABLE", DASHBOARD_THEME.SECTION);
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.SLA_ROW - 2, 8, 7, "SLA MONITOR", DASHBOARD_THEME.ORANGE);
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.PEAK_HOUR_ROW - 2, 1, 14, "PEAK HOUR ANALYSIS", DASHBOARD_THEME.CYAN);
   renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.PICKER_ROW - 1, 1, 14, "TOP PICKER MTD RANKING", DASHBOARD_THEME.GREEN);
-  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.HEATMAP_ROW - 1, 1, 14, "HOURLY HEATMAP | PEAK AND WEAK PERFORMANCE HOURS", DASHBOARD_THEME.RED);
-  renderChartCard_(sheet, GRAPH_LAYOUT.ORDERS_CHART_ROW, 1, 18, 7);
-  renderChartCard_(sheet, GRAPH_LAYOUT.ITEMS_CHART_ROW, 8, 18, 7);
-  renderChartCard_(sheet, GRAPH_LAYOUT.SPEED_CHART_ROW, 1, 18, 7);
 }
 
 function renderDashboardSectionTitle_(sheet, row, column, numColumns, title, color) {
@@ -1027,12 +1024,6 @@ function renderDashboardSectionTitle_(sheet, row, column, numColumns, title, col
     .setHorizontalAlignment("center")
     .setVerticalAlignment("middle");
   sheet.setRowHeight(row, 38);
-}
-
-function renderChartCard_(sheet, row, column, numRows, numColumns) {
-  sheet.getRange(row, column, numRows, numColumns)
-    .setBackground("#1E293B")
-    .setBorder(true, true, true, true, false, false, "#475569", SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
 }
 
 function renderKpiCards_(sheet, startRow, kpiRows, cardWidth) {
@@ -1104,83 +1095,79 @@ function renderDashboardMatrix_(sheet, startRow, startColumn, title, values, col
   sheet.getRange(startRow + 1, startColumn, values.length, values[0].length).setValues(values);
 }
 
-function insertDashboardCharts_(dashboardSheet, dataSheet, orderMatrix, itemMatrix, performanceRows) {
-  if (orderMatrix.length > 1 && orderMatrix[0].length > 1) {
-    insertDarkStoreLineChart_(
-      dashboardSheet,
-      "Hourly Orders | Today vs Same Day Last Week",
-      dataSheet.getRange(GRAPH_LAYOUT.ORDER_SOURCE_ROW + 1, 1, orderMatrix.length, Math.min(orderMatrix[0].length, 3)),
-      GRAPH_LAYOUT.ORDERS_CHART_ROW,
-      1,
-      {
-        hAxisTitle: "Hour",
-        vAxisTitle: "Orders",
-        colors: ["#A5B4FC", "#FFFFFF"],
-        width: 820,
-        height: 450
-      }
-    );
+function renderHourlyMetricComparisonTable_(sheet, startRow, startColumn, matrix, metricName) {
+  var rows = [["Hour", "Today " + metricName, "Last Week " + metricName, "Difference", "Variance %"]];
+
+  for (var i = 1; i < matrix.length; i++) {
+    var lastWeek = toNumber_(matrix[i][1]);
+    var today = toNumber_(matrix[i][2]);
+    var difference = today - lastWeek;
+    var variancePercent = lastWeek !== 0 ? (difference / lastWeek) * 100 : "";
+
+    rows.push([
+      matrix[i][0],
+      today,
+      lastWeek,
+      difference,
+      variancePercent === "" ? "" : formatVarianceText_(variancePercent)
+    ]);
   }
 
-  if (itemMatrix.length > 1 && itemMatrix[0].length > 1) {
-    insertDarkStoreLineChart_(
-      dashboardSheet,
-      "Hourly Items | Today vs Same Day Last Week",
-      dataSheet.getRange(GRAPH_LAYOUT.ITEM_SOURCE_ROW + 1, 1, itemMatrix.length, Math.min(itemMatrix[0].length, 3)),
-      GRAPH_LAYOUT.ITEMS_CHART_ROW,
-      8,
-      {
-        hAxisTitle: "Hour",
-        vAxisTitle: "Items",
-        colors: ["#A5B4FC", "#FFFFFF"],
-        width: 820,
-        height: 450
-      }
-    );
-  }
+  sheet.getRange(startRow, startColumn, rows.length, rows[0].length).setValues(rows);
+  formatDashboardTable_(sheet, startRow, startColumn, rows.length, rows[0].length, DASHBOARD_THEME.SECTION);
 
-  if (performanceRows.length > 1) {
-    insertDarkStoreLineChart_(
-      dashboardSheet,
-      "Hourly Speed Trend | AT / PT / PKT / P95",
-      dataSheet.getRange(GRAPH_LAYOUT.PERFORMANCE_SOURCE_ROW + 1, 1, performanceRows.length, performanceRows[0].length),
-      GRAPH_LAYOUT.SPEED_CHART_ROW,
-      1,
-      {
-        hAxisTitle: "Hour",
-        vAxisTitle: "Minutes",
-        colors: ["#FCD34D", "#86EFAC", "#BFDBFE", "#FCA5A5"],
-        width: 820,
-        height: 450
-      }
-    );
+  for (var row = 1; row < rows.length; row++) {
+    var status = getTrendIndicator_(toNumber_(rows[row][3]), true).status;
+    applyComparisonCellStyle_(sheet.getRange(startRow + row, startColumn + 1), status);
   }
-
-  dashboardSheet.autoResizeColumns(1, 14);
 }
 
-function insertDarkStoreLineChart_(sheet, title, range, row, column, options) {
-  var chart = sheet.newChart()
-    .setChartType(Charts.ChartType.LINE)
-    .addRange(range)
-    .setOption("title", title)
-    .setOption("legend", { position: "top", textStyle: { color: "#FFFFFF", fontSize: 14 } })
-    .setOption("hAxis", { title: options.hAxisTitle, textStyle: { color: "#E2E8F0", fontSize: 11 }, titleTextStyle: { color: "#E2E8F0", fontSize: 12, bold: true }, baselineColor: "#64748B", gridlines: { color: "#475569" }, minorGridlines: { color: "#344055" } })
-    .setOption("vAxis", { title: options.vAxisTitle, textStyle: { color: "#E2E8F0", fontSize: 11 }, titleTextStyle: { color: "#E2E8F0", fontSize: 12, bold: true }, baselineColor: "#64748B", gridlines: { color: "#475569" }, minorGridlines: { color: "#344055" } })
-    .setOption("colors", options.colors || [DASHBOARD_THEME.BLUE, DASHBOARD_THEME.GREEN])
-    .setOption("curveType", "function")
-    .setOption("backgroundColor", "#1E293B")
-    .setOption("chartArea", { left: 80, top: 70, width: "76%", height: "62%", backgroundColor: DASHBOARD_THEME.CARD })
-    .setOption("titleTextStyle", { color: "#FFFFFF", fontSize: 16, bold: true })
-    .setOption("lineWidth", 6)
-    .setOption("pointSize", 8)
-    .setOption("pointsVisible", true)
-    .setOption("width", options.width || 620)
-    .setOption("height", options.height || 320)
-    .setPosition(row, column, 0, 0)
-    .build();
+function buildHourlySpeedComparisonRows_(hourlyRows, comparisonHourlyRows) {
+  var latestByHour = mapHourlyRowsByHour_(hourlyRows);
+  var comparisonByHour = mapHourlyRowsByHour_(comparisonHourlyRows);
+  var rows = [["Hour", "Today AT", "Last Week AT", "Today PT", "Last Week PT", "Today PKT", "Last Week PKT", "Today P95", "Last Week P95"]];
 
-  sheet.insertChart(chart);
+  for (var hour = 0; hour < 24; hour++) {
+    var latest = latestByHour[hour] || {};
+    var comparison = comparisonByHour[hour] || {};
+
+    rows.push([
+      hour,
+      round2_(toNumber_(latest.at)),
+      round2_(toNumber_(comparison.at)),
+      round2_(toNumber_(latest.pt)),
+      round2_(toNumber_(comparison.pt)),
+      round2_(toNumber_(latest.pkt)),
+      round2_(toNumber_(comparison.pkt)),
+      round2_(toNumber_(latest.p95)),
+      round2_(toNumber_(comparison.p95))
+    ]);
+  }
+
+  return rows;
+}
+
+function mapHourlyRowsByHour_(hourlyRows) {
+  var rowsByHour = {};
+
+  hourlyRows.forEach(function(row) {
+    rowsByHour[row.hour] = row;
+  });
+
+  return rowsByHour;
+}
+
+function renderHourlySpeedComparisonTable_(sheet, speedComparisonRows) {
+  var startRow = GRAPH_LAYOUT.SPEED_TABLE_ROW;
+  sheet.getRange(startRow, 1, speedComparisonRows.length, speedComparisonRows[0].length).setValues(speedComparisonRows);
+  formatDashboardTable_(sheet, startRow, 1, speedComparisonRows.length, speedComparisonRows[0].length, DASHBOARD_THEME.SECTION);
+
+  for (var row = 1; row < speedComparisonRows.length; row++) {
+    applyComparisonCellStyle_(sheet.getRange(startRow + row, 2), getTrendIndicator_(toNumber_(speedComparisonRows[row][1]) - toNumber_(speedComparisonRows[row][2]), false).status);
+    applyComparisonCellStyle_(sheet.getRange(startRow + row, 4), getTrendIndicator_(toNumber_(speedComparisonRows[row][3]) - toNumber_(speedComparisonRows[row][4]), false).status);
+    applyComparisonCellStyle_(sheet.getRange(startRow + row, 6), getTrendIndicator_(toNumber_(speedComparisonRows[row][5]) - toNumber_(speedComparisonRows[row][6]), false).status);
+    applyComparisonCellStyle_(sheet.getRange(startRow + row, 8), getTrendIndicator_(toNumber_(speedComparisonRows[row][7]) - toNumber_(speedComparisonRows[row][8]), false).status);
+  }
 }
 
 function renderVarianceAnalysisTable_(sheet, dailyComparisonRows) {
@@ -1279,45 +1266,6 @@ function renderTopPickerMtdRanking_(sheet, mtdRows) {
   var startRow = GRAPH_LAYOUT.PICKER_ROW;
   sheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
   formatDashboardTable_(sheet, startRow, 1, rows.length, rows[0].length, DASHBOARD_THEME.GREEN);
-}
-
-function renderHourlyHeatmap_(sheet, heatmapRows) {
-  if (!heatmapRows || heatmapRows.length === 0) return;
-
-  var startRow = GRAPH_LAYOUT.HEATMAP_ROW;
-  var numRows = heatmapRows.length;
-  var numColumns = heatmapRows[0].length;
-  sheet.getRange(startRow, 1, numRows, numColumns).setValues(heatmapRows);
-  formatDashboardTable_(sheet, startRow, 1, numRows, numColumns, DASHBOARD_THEME.RED);
-
-  var backgrounds = [];
-
-  for (var r = 1; r < heatmapRows.length; r++) {
-    var rowBackgrounds = [];
-    for (var c = 0; c < numColumns; c++) rowBackgrounds.push(DASHBOARD_THEME.CARD);
-
-    rowBackgrounds[2] = comparisonBackgroundColor_(toNumber_(heatmapRows[r][2]) - toNumber_(heatmapRows[r][1]), true);
-    rowBackgrounds[5] = comparisonBackgroundColor_(toNumber_(heatmapRows[r][5]) - toNumber_(heatmapRows[r][4]), true);
-    rowBackgrounds[3] = varianceHeatmapColor_(toNumber_(heatmapRows[r][3]));
-    rowBackgrounds[6] = varianceHeatmapColor_(toNumber_(heatmapRows[r][6]));
-    rowBackgrounds[7] = slaHeatmapColor_(toNumber_(heatmapRows[r][7]), 5);
-    rowBackgrounds[8] = slaHeatmapColor_(toNumber_(heatmapRows[r][8]), 11);
-    rowBackgrounds[9] = slaHeatmapColor_(toNumber_(heatmapRows[r][9]), 5);
-    rowBackgrounds[10] = slaHeatmapColor_(toNumber_(heatmapRows[r][10]), 2);
-    backgrounds.push(rowBackgrounds);
-  }
-
-  if (backgrounds.length > 0) {
-    sheet.getRange(startRow + 1, 1, backgrounds.length, numColumns).setBackgrounds(backgrounds);
-
-    for (var hr = 1; hr < heatmapRows.length; hr++) {
-      var rowNumber = startRow + hr;
-      applyComparisonCellStyle_(sheet.getRange(rowNumber, 3), getTrendIndicator_(toNumber_(heatmapRows[hr][2]) - toNumber_(heatmapRows[hr][1]), true).status);
-      applyComparisonCellStyle_(sheet.getRange(rowNumber, 6), getTrendIndicator_(toNumber_(heatmapRows[hr][5]) - toNumber_(heatmapRows[hr][4]), true).status);
-    }
-  }
-
-  sheet.setRowHeights(startRow, numRows, 32);
 }
 
 function formatDashboardTable_(sheet, row, column, numRows, numColumns, headerColor) {
@@ -1697,25 +1645,6 @@ function getComparisonStyle_(status) {
     text: "#CBD5E1",
     border: "#475569"
   };
-}
-
-function comparisonBackgroundColor_(difference, higherIsBetter) {
-  return getTrendIndicator_(difference, higherIsBetter).background;
-}
-
-function varianceHeatmapColor_(value) {
-  if (value > 0) return "#1F3B2D";
-  if (value < 0) return "#4B2E2E";
-  return DASHBOARD_THEME.LIGHT;
-}
-
-function slaHeatmapColor_(value, target) {
-  if (value <= 0) return DASHBOARD_THEME.LIGHT;
-  if (value <= target) return "#1F3B2D";
-  if (value <= target * 1.1) return "#355E4A";
-  if (value <= target * 1.25) return "#3F3A24";
-  if (value <= target * 1.5) return "#4B3A20";
-  return "#4B2E2E";
 }
 
 function formatKpiValue_(value, valueType) {
