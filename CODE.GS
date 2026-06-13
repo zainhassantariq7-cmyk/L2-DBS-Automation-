@@ -477,73 +477,13 @@ function updateComplaintAnalysis() {
   var rcaSheet = getRequiredSheet_(rcaSS, CONFIG.SHEETS.RCA_DATABASE);
   var analysisSheet = getRequiredSheet_(destSS, CONFIG.SHEETS.COMPLAINT_ANALYSIS);
   var data = rcaSheet.getDataRange().getValues();
+  var output = buildComplaintIntelligenceRows_(data);
 
-  clearSheetContents_(analysisSheet, 1, 1, Math.max(analysisSheet.getLastRow(), 1), 23);
-
-  writeTable_(
-    analysisSheet,
-    1,
-    1,
-    buildTopUniqueCountList_(data, {
-      header: ["Rank", "SKU ID", "SKU Name", "Unique Order Count"],
-      limit: 5,
-      keyColumn: 5,
-      labelColumn: 8,
-      uniqueColumn: 4
-    })
-  );
-
-  writeTable_(
-    analysisSheet,
-    1,
-    6,
-    buildTopUniqueCountList_(data, {
-      header: ["Rank", "Customer ID", "Unique Order Count"],
-      limit: 5,
-      keyColumn: 15,
-      uniqueColumn: 4
-    })
-  );
-
-  writeTable_(
-    analysisSheet,
-    1,
-    10,
-    buildDeliveryAgentComplaintOrderTable_(data, 5)
-  );
-
-  writeTable_(
-    analysisSheet,
-    1,
-    15,
-    buildUniqueCountTable_(data, {
-      header: ["RCA", "Unique Order Count"],
-      keyColumn: 16,
-      uniqueColumn: 4
-    })
-  );
-
-  writeTable_(
-    analysisSheet,
-    1,
-    18,
-    buildUniqueCountTable_(data, {
-      header: ["Defect Category", "Unique Order Count"],
-      keyColumn: 7,
-      uniqueColumn: 4
-    })
-  );
-
-  writeTable_(
-    analysisSheet,
-    1,
-    21,
-    buildTopList_(data, {
-      header: ["Rank", "Complaint Reason", "Count"],
-      limit: 10,
-      keyColumn: 9
-    })
-  );
+  analysisSheet.getRange(1, 1, analysisSheet.getMaxRows(), analysisSheet.getMaxColumns()).breakApart();
+  analysisSheet.clear();
+  ensureSheetSize_(analysisSheet, output.length + 2, getMaxRowWidth_(output) + 1);
+  writePaddedRows_(analysisSheet, 1, 1, output);
+  formatComplaintIntelligenceSheet_(analysisSheet, output);
 }
 
 function updateWeeklyAnalytics() {
@@ -2315,6 +2255,331 @@ function getStoredMerchandisingScores_() {
 function saveMerchandisingScores_(scores) {
   PropertiesService.getScriptProperties()
     .setProperty(CONFIG.PROPERTIES.MERCHANDISING_SCORES, JSON.stringify(scores || {}));
+}
+
+function buildComplaintIntelligenceRows_(data) {
+  var records = getComplaintRecords_(data);
+  var stats = buildComplaintStats_(records);
+  var output = [
+    ["COMPLAINT INTELLIGENCE CENTER"],
+    ["Scope", "All recorded complaints", "Source", CONFIG.SHEETS.RCA_DATABASE, "Generated At", Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss")],
+    [""]
+  ];
+
+  addComplaintSection_(output, "EXECUTIVE COMPLAINT SUMMARY", ["Metric", "Value", "Definition"], [
+    ["Total Complaints", stats.totalComplaints, "Raw complaint rows"],
+    ["Unique Orders Impacted", stats.uniqueOrders, "Distinct Order IDs"],
+    ["Complaint Rate %", formatComplaintPercent_(stats.complaintRate), "Complaints per impacted order from RCA data"],
+    ["Most Common RCA", stats.topRca.key || "No data", "Highest complaint count RCA"],
+    ["Most Common RCA %", formatComplaintPercent_(stats.topRca.percent), "Share of total complaints"],
+    ["Most Common Complaint Category", stats.topCategory.key || "No data", "Highest complaint count category"],
+    ["Most Common Complaint Category %", formatComplaintPercent_(stats.topCategory.percent), "Share of total complaints"],
+    ["Top Complaint SKU", stats.topSku.key || "No data", stats.topSku.label || ""],
+    ["Top Complaint Picker", stats.topPicker.key || "No data", "Highest complaint count picker"]
+  ]);
+
+  addComplaintSection_(output, "MONTHLY COMPARISON", ["Month", "Complaint Count", "Unique Orders Impacted", "Complaint Rate %"],
+    buildComplaintMonthlyRows_(records));
+
+  addComplaintSection_(output, "RCA ANALYSIS", ["RCA", "Complaint Count", "Percentage"],
+    buildComplaintSummaryRows_(stats.rca, false, 0, false));
+
+  addComplaintSection_(output, "COMPLAINT CATEGORY ANALYSIS", ["Complaint Category", "Complaint Count", "Percentage"],
+    buildComplaintSummaryRows_(stats.categories, false, 0, false));
+
+  addComplaintSection_(output, "TOP 5 COMPLAINT SKUs", ["Rank", "SKU", "Complaint Count", "Percentage"],
+    buildComplaintSummaryRows_(stats.skus, true, 5, false));
+
+  addComplaintSection_(output, "TOP 5 PICKERS BY COMPLAINT COUNT", ["Rank", "Picker", "Complaint Count", "Unique Orders Impacted", "Percentage"],
+    buildComplaintSummaryRows_(stats.pickers, true, 5, true));
+
+  addComplaintSection_(output, "TOP 5 CUSTOMERS BY COMPLAINT COUNT", ["Rank", "Customer", "Complaint Count", "Unique Orders Impacted", "Percentage"],
+    buildComplaintSummaryRows_(stats.customers, true, 5, true));
+
+  addComplaintSection_(output, "TOP 5 DAs BY COMPLAINT COUNT", ["Rank", "DA", "Complaint Count", "Unique Orders Impacted", "Percentage"],
+    buildComplaintSummaryRows_(stats.deliveryAgents, true, 5, true));
+
+  addComplaintSection_(output, "KEY INSIGHTS", ["Insight"], buildComplaintInsightRows_(stats));
+
+  addComplaintSection_(output, "RAW COMPLAINT DATA", data[0] || ["No header"], data.slice(1));
+
+  return output;
+}
+
+function getComplaintRecords_(data) {
+  var records = [];
+
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var orderId = normalizeText_(row[4]);
+
+    if (!orderId && !normalizeDate_(row[0]) && !normalizeText_(row[16]) && !normalizeText_(row[7])) continue;
+
+    records.push({
+      raw: row,
+      dateKey: normalizeDate_(row[0]),
+      monthKey: getMonthKey_(normalizeDate_(row[0])),
+      orderId: orderId,
+      sku: normalizeText_(row[5]),
+      skuName: normalizeText_(row[8]),
+      category: normalizeText_(row[7]),
+      reason: normalizeText_(row[9]),
+      daId: normalizeText_(row[10]),
+      daName: normalizeText_(row[11]),
+      picker: normalizeText_(row[13]),
+      customer: normalizeText_(row[15]),
+      rca: normalizeText_(row[16])
+    });
+  }
+
+  return records;
+}
+
+function buildComplaintStats_(records) {
+  var totalComplaints = records.length;
+  var uniqueOrders = {};
+  var stats = {
+    totalComplaints: totalComplaints,
+    rca: {},
+    categories: {},
+    skus: {},
+    pickers: {},
+    customers: {},
+    deliveryAgents: {}
+  };
+
+  records.forEach(function(record) {
+    if (record.orderId) uniqueOrders[record.orderId] = true;
+
+    addComplaintSummaryItem_(stats.rca, record.rca || "Unclassified", "", record.orderId);
+    addComplaintSummaryItem_(stats.categories, record.category || "Unclassified", "", record.orderId);
+    addComplaintSummaryItem_(stats.skus, record.sku || "Unknown SKU", record.skuName, record.orderId);
+    addComplaintSummaryItem_(stats.pickers, record.picker || "Unknown Picker", "", record.orderId);
+    addComplaintSummaryItem_(stats.customers, record.customer || "Unknown Customer", "", record.orderId);
+    addComplaintSummaryItem_(stats.deliveryAgents, record.daId || record.daName || "Unknown DA", record.daName, record.orderId);
+  });
+
+  stats.uniqueOrders = Object.keys(uniqueOrders).length;
+  stats.complaintRate = stats.uniqueOrders > 0 ? (stats.totalComplaints / stats.uniqueOrders) * 100 : 0;
+  stats.rcaRows = sortComplaintSummary_(stats.rca, totalComplaints);
+  stats.categoryRows = sortComplaintSummary_(stats.categories, totalComplaints);
+  stats.skuRows = sortComplaintSummary_(stats.skus, totalComplaints);
+  stats.pickerRows = sortComplaintSummary_(stats.pickers, totalComplaints);
+  stats.customerRows = sortComplaintSummary_(stats.customers, totalComplaints);
+  stats.daRows = sortComplaintSummary_(stats.deliveryAgents, totalComplaints);
+  stats.topRca = stats.rcaRows[0] || {};
+  stats.topCategory = stats.categoryRows[0] || {};
+  stats.topSku = stats.skuRows[0] || {};
+  stats.topPicker = stats.pickerRows[0] || {};
+
+  return stats;
+}
+
+function addComplaintSummaryItem_(summary, key, label, orderId) {
+  if (!summary[key]) {
+    summary[key] = {
+      key: key,
+      label: label || "",
+      count: 0,
+      orders: {}
+    };
+  }
+
+  if (!summary[key].label && label) summary[key].label = label;
+  summary[key].count++;
+  if (orderId) summary[key].orders[orderId] = true;
+}
+
+function sortComplaintSummary_(summary, totalComplaints) {
+  return Object.keys(summary).map(function(key) {
+    return {
+      key: key,
+      label: summary[key].label,
+      count: summary[key].count,
+      uniqueOrders: Object.keys(summary[key].orders).length,
+      percent: totalComplaints > 0 ? (summary[key].count / totalComplaints) * 100 : 0
+    };
+  }).sort(function(a, b) {
+    return b.count - a.count || a.key.localeCompare(b.key);
+  });
+}
+
+function buildComplaintMonthlyRows_(records) {
+  var months = {};
+
+  records.forEach(function(record) {
+    var monthKey = record.monthKey || "Unknown";
+    if (!months[monthKey]) {
+      months[monthKey] = {
+        count: 0,
+        orders: {}
+      };
+    }
+
+    months[monthKey].count++;
+    if (record.orderId) months[monthKey].orders[record.orderId] = true;
+  });
+
+  return Object.keys(months).sort().map(function(monthKey) {
+    var uniqueOrders = Object.keys(months[monthKey].orders).length;
+    return [
+      monthKey,
+      months[monthKey].count,
+      uniqueOrders,
+      uniqueOrders > 0 ? formatComplaintPercent_((months[monthKey].count / uniqueOrders) * 100) : "n/a"
+    ];
+  });
+}
+
+function buildComplaintSummaryRows_(summary, ranked, limit, includeUniqueOrders) {
+  var rows = sortComplaintSummary_(summary, Object.keys(summary).reduce(function(total, key) {
+    return total + summary[key].count;
+  }, 0));
+  var limitedRows = limit > 0 ? rows.slice(0, limit) : rows;
+
+  return limitedRows.map(function(row, index) {
+    var name = row.label ? row.key + " - " + row.label : row.key;
+    if (ranked && includeUniqueOrders) {
+      return [index + 1, name, row.count, row.uniqueOrders, formatComplaintPercent_(row.percent)];
+    }
+
+    if (ranked) {
+      return [index + 1, name, row.count, formatComplaintPercent_(row.percent)];
+    }
+
+    return [name, row.count, formatComplaintPercent_(row.percent)];
+  });
+}
+
+function buildComplaintInsightRows_(stats) {
+  var top5SkuCount = stats.skuRows.slice(0, 5).reduce(function(total, row) {
+    return total + row.count;
+  }, 0);
+  var topCustomer = stats.customerRows[0] || {};
+
+  return [
+    [(stats.topCategory.key || "No category") + " contributes " + formatComplaintPercent_(stats.topCategory.percent || 0) + " of complaints."],
+    [(stats.topRca.key || "No RCA") + " contributes " + formatComplaintPercent_(stats.topRca.percent || 0) + " of all RCAs."],
+    ["Top 5 SKUs contribute " + formatComplaintPercent_(stats.totalComplaints > 0 ? (top5SkuCount / stats.totalComplaints) * 100 : 0) + " of complaints."],
+    ["Complaint Rate is " + formatComplaintPercent_(stats.complaintRate) + " based on RCA complaint rows per impacted order."],
+    ["Most impacted customer has " + (topCustomer.count || 0) + " complaints."],
+    ["Most impacted picker has " + ((stats.topPicker && stats.topPicker.count) || 0) + " complaints."]
+  ];
+}
+
+function addComplaintSection_(output, title, header, rows) {
+  output.push([title]);
+  output.push(header);
+
+  if (!rows || rows.length === 0) {
+    output.push(["No data"]);
+  } else {
+    rows.forEach(function(row) {
+      output.push(row);
+    });
+  }
+
+  output.push([""]);
+}
+
+function formatComplaintPercent_(value) {
+  return formatNumber_(round2_(toNumber_(value)), 2) + "%";
+}
+
+function formatComplaintIntelligenceSheet_(sheet, rows) {
+  if (!rows || rows.length === 0) return;
+
+  var maxColumns = getMaxRowWidth_(rows);
+  var rowCount = rows.length;
+  ensureSheetSize_(sheet, rowCount + 2, maxColumns + 1);
+
+  var usedRange = sheet.getRange(1, 1, rowCount, maxColumns);
+  usedRange
+    .setBackground(DASHBOARD_THEME.BACKGROUND)
+    .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
+    .setFontFamily("Arial")
+    .setFontSize(10)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle")
+    .setWrap(true)
+    .setBorder(false, false, false, false, false, false);
+
+  sheet.setFrozenRows(1);
+  sheet.setHiddenGridlines(true);
+  sheet.setTabColor(DASHBOARD_THEME.BACKGROUND);
+  sheet.setRowHeights(1, rowCount, 32);
+
+  sheet.getRange(1, 1, 1, maxColumns)
+    .merge()
+    .setBackground(DASHBOARD_THEME.NAVY)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold")
+    .setFontSize(22)
+    .setHorizontalAlignment("center");
+  sheet.setRowHeight(1, 44);
+
+  for (var i = 1; i < rows.length; i++) {
+    if (isBlankRow_(rows[i])) continue;
+
+    if (isComplaintSectionTitleRow_(rows, i)) {
+      var endIndex = i;
+      while (endIndex + 1 < rows.length && !isBlankRow_(rows[endIndex + 1])) {
+        endIndex++;
+      }
+
+      formatComplaintSectionRange_(sheet, rows, i + 1, endIndex + 1, maxColumns);
+      i = endIndex;
+    }
+  }
+
+  sheet.autoResizeColumns(1, Math.min(maxColumns, 15));
+}
+
+function isComplaintSectionTitleRow_(rows, rowIndex) {
+  if (rowIndex + 1 >= rows.length) return false;
+  if (isBlankRow_(rows[rowIndex])) return false;
+  return !isBlankRow_(rows[rowIndex + 1]);
+}
+
+function formatComplaintSectionRange_(sheet, rows, startRow, endRow, maxColumns) {
+  var rowCount = endRow - startRow + 1;
+
+  sheet.getRange(startRow, 1, rowCount, maxColumns)
+    .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+
+  sheet.getRange(startRow, 1, 1, maxColumns)
+    .setBackground(DASHBOARD_THEME.SECTION)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold")
+    .setFontSize(15);
+  sheet.setRowHeight(startRow, 38);
+
+  if (rowCount > 1) {
+    sheet.getRange(startRow + 1, 1, 1, maxColumns)
+      .setBackground(DASHBOARD_THEME.SECTION)
+      .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+      .setFontWeight("bold")
+      .setFontSize(11);
+  }
+
+  if (rowCount > 2) {
+    var bodyRows = rowCount - 2;
+    var backgrounds = [];
+    for (var r = 0; r < bodyRows; r++) {
+      var rowBackgrounds = [];
+      for (var c = 0; c < maxColumns; c++) {
+        rowBackgrounds.push(r % 2 === 0 ? DASHBOARD_THEME.CARD : "#1E293B");
+      }
+      backgrounds.push(rowBackgrounds);
+    }
+
+    sheet.getRange(startRow + 2, 1, bodyRows, maxColumns)
+      .setBackgrounds(backgrounds)
+      .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
+      .setFontSize(10)
+      .setFontWeight("normal")
+      .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  }
 }
 
 function buildTopList_(data, options) {
