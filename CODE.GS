@@ -476,8 +476,10 @@ function updateComplaintAnalysis() {
   var destSS = SpreadsheetApp.openById(CONFIG.DEST_ID);
   var rcaSheet = getRequiredSheet_(rcaSS, CONFIG.SHEETS.RCA_DATABASE);
   var analysisSheet = getRequiredSheet_(destSS, CONFIG.SHEETS.COMPLAINT_ANALYSIS);
+  var rdbSheet = getRequiredSheet_(destSS, CONFIG.SHEETS.RDB);
   var data = rcaSheet.getDataRange().getValues();
-  var output = buildComplaintIntelligenceRows_(data);
+  var totalOrders = getTotalOrdersFromRdb_(rdbSheet.getDataRange().getValues());
+  var output = buildComplaintIntelligenceRows_(data, totalOrders);
 
   analysisSheet.getRange(1, 1, analysisSheet.getMaxRows(), analysisSheet.getMaxColumns()).breakApart();
   analysisSheet.clear();
@@ -2257,9 +2259,9 @@ function saveMerchandisingScores_(scores) {
     .setProperty(CONFIG.PROPERTIES.MERCHANDISING_SCORES, JSON.stringify(scores || {}));
 }
 
-function buildComplaintIntelligenceRows_(data) {
+function buildComplaintIntelligenceRows_(data, totalOrders) {
   var records = getComplaintRecords_(data);
-  var stats = buildComplaintStats_(records);
+  var stats = buildComplaintStats_(records, totalOrders);
   var output = [
     ["COMPLAINT INTELLIGENCE CENTER"],
     ["Scope", "All recorded complaints", "Source", CONFIG.SHEETS.RCA_DATABASE, "Generated At", Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss")],
@@ -2267,9 +2269,8 @@ function buildComplaintIntelligenceRows_(data) {
   ];
 
   addComplaintSection_(output, "EXECUTIVE COMPLAINT SUMMARY", ["Metric", "Value", "Definition"], [
-    ["Total Unique Orders", stats.totalUniqueOrders, "Distinct Order IDs in RCA data"],
     ["Unique Orders With Complaints", stats.uniqueOrdersWithComplaints, "Distinct Order IDs with at least one complaint"],
-    ["Complaint Rate %", formatComplaintPercent_(stats.complaintRate), "Unique Orders With Complaints / Total Unique Orders"],
+    ["Complaint Rate %", formatComplaintPercent_(stats.complaintRate), "Unique Orders With Complaints / Total Orders from RDB"],
     ["Most Common RCA", stats.topRca.key || "No data", "Highest complaint count RCA"],
     ["Most Common RCA %", formatComplaintPercent_(stats.topRca.percent), "Share of total complaints"],
     ["Most Common Complaint Category", stats.topCategory.key || "No data", "Highest complaint count category"],
@@ -2306,6 +2307,16 @@ function buildComplaintIntelligenceRows_(data) {
   return output;
 }
 
+function getTotalOrdersFromRdb_(rdbData) {
+  var totalOrders = 0;
+
+  for (var i = 1; i < rdbData.length; i++) {
+    totalOrders += toNumber_(rdbData[i][3]);
+  }
+
+  return totalOrders;
+}
+
 function getComplaintRecords_(data) {
   var records = [];
 
@@ -2335,7 +2346,7 @@ function getComplaintRecords_(data) {
   return records;
 }
 
-function buildComplaintStats_(records) {
+function buildComplaintStats_(records, totalOrders) {
   var totalComplaints = records.length;
   var uniqueOrders = {};
   var stats = {
@@ -2359,10 +2370,10 @@ function buildComplaintStats_(records) {
     addComplaintSummaryItem_(stats.deliveryAgents, record.daId || record.daName || "Unknown DA", record.daName, record.orderId);
   });
 
-  stats.totalUniqueOrders = Object.keys(uniqueOrders).length;
-  stats.uniqueOrdersWithComplaints = stats.totalUniqueOrders;
+  stats.uniqueOrdersWithComplaints = Object.keys(uniqueOrders).length;
   stats.uniqueOrders = stats.uniqueOrdersWithComplaints;
-  stats.complaintRate = stats.totalUniqueOrders > 0 ? (stats.uniqueOrdersWithComplaints / stats.totalUniqueOrders) * 100 : 0;
+  stats.totalOrders = toNumber_(totalOrders);
+  stats.complaintRate = stats.totalOrders > 0 ? (stats.uniqueOrdersWithComplaints / stats.totalOrders) * 100 : 0;
   stats.rcaRows = sortComplaintSummary_(stats.rca, totalComplaints);
   stats.categoryRows = sortComplaintSummary_(stats.categories, totalComplaints);
   stats.skuRows = sortComplaintSummary_(stats.skus, totalComplaints);
