@@ -478,8 +478,8 @@ function updateComplaintAnalysis() {
   var analysisSheet = getRequiredSheet_(destSS, CONFIG.SHEETS.COMPLAINT_ANALYSIS);
   var rdbSheet = getRequiredSheet_(destSS, CONFIG.SHEETS.RDB);
   var data = rcaSheet.getDataRange().getValues();
-  var totalOrders = getTotalOrdersFromRdb_(rdbSheet.getDataRange().getValues());
-  var output = buildComplaintIntelligenceRows_(data, totalOrders);
+  var orderContext = getComplaintOrderContextFromRdb_(rdbSheet.getDataRange().getValues());
+  var output = buildComplaintIntelligenceRows_(data, orderContext);
 
   analysisSheet.getRange(1, 1, analysisSheet.getMaxRows(), analysisSheet.getMaxColumns()).breakApart();
   analysisSheet.clear();
@@ -2259,9 +2259,9 @@ function saveMerchandisingScores_(scores) {
     .setProperty(CONFIG.PROPERTIES.MERCHANDISING_SCORES, JSON.stringify(scores || {}));
 }
 
-function buildComplaintIntelligenceRows_(data, totalOrders) {
+function buildComplaintIntelligenceRows_(data, orderContext) {
   var records = getComplaintRecords_(data);
-  var stats = buildComplaintStats_(records, totalOrders);
+  var stats = buildComplaintStats_(records, orderContext);
   var output = [
     ["COMPLAINT INTELLIGENCE CENTER"],
     ["Scope", "All recorded complaints", "Source", CONFIG.SHEETS.RCA_DATABASE, "Generated At", Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss")],
@@ -2272,33 +2272,33 @@ function buildComplaintIntelligenceRows_(data, totalOrders) {
     ["Unique Orders With Complaints", stats.uniqueOrdersWithComplaints, "Distinct Order IDs with at least one complaint"],
     ["Complaint Rate %", formatComplaintPercent_(stats.complaintRate), "Unique Orders With Complaints / Total Orders from RDB"],
     ["Most Common RCA", stats.topRca.key || "No data", "Highest complaint count RCA"],
-    ["Most Common RCA %", formatComplaintPercent_(stats.topRca.percent), "Share of total complaints"],
+    ["Most Common RCA %", formatComplaintPercent_(stats.topRca.percent), "Share of unique complaint orders"],
     ["Most Common Complaint Category", stats.topCategory.key || "No data", "Highest complaint count category"],
-    ["Most Common Complaint Category %", formatComplaintPercent_(stats.topCategory.percent), "Share of total complaints"],
+    ["Most Common Complaint Category %", formatComplaintPercent_(stats.topCategory.percent), "Share of unique complaint orders"],
     ["Top Complaint SKU", stats.topSku.key || "No data", stats.topSku.label || ""],
     ["Top Complaint Picker", stats.topPicker.key || "No data", "Highest complaint count picker"]
   ]);
 
   addComplaintSection_(output, "MONTHLY COMPARISON", ["Month", "Complaint Count", "Unique Orders Impacted", "Complaint Rate %"],
-    buildComplaintMonthlyRows_(records));
+    buildComplaintMonthlyRows_(records, orderContext));
 
-  addComplaintSection_(output, "RCA ANALYSIS", ["RCA", "Complaint Count", "Percentage"],
-    buildComplaintSummaryRows_(stats.rca, false, 0, false));
+  addComplaintSection_(output, "RCA ANALYSIS", ["RCA", "Complaint Count", "RCA Complaint %"],
+    buildComplaintSummaryRows_(stats.rca, false, 0, false, stats.uniqueOrdersWithComplaints));
 
-  addComplaintSection_(output, "COMPLAINT CATEGORY ANALYSIS", ["Complaint Category", "Complaint Count", "Percentage"],
-    buildComplaintSummaryRows_(stats.categories, false, 0, false));
+  addComplaintSection_(output, "COMPLAINT CATEGORY ANALYSIS", ["Complaint Category", "Complaint Count", "Category Complaint %"],
+    buildComplaintSummaryRows_(stats.categories, false, 0, false, stats.uniqueOrdersWithComplaints));
 
-  addComplaintSection_(output, "TOP 5 COMPLAINT SKUs", ["Rank", "SKU", "Complaint Count", "Percentage"],
-    buildComplaintSummaryRows_(stats.skus, true, 5, false));
+  addComplaintSection_(output, "TOP 5 COMPLAINT SKUs", ["Rank", "SKU", "Complaint Count", "SKU Complaint %"],
+    buildComplaintSummaryRows_(stats.skus, true, 5, false, stats.uniqueOrdersWithComplaints));
 
-  addComplaintSection_(output, "TOP 5 PICKERS BY COMPLAINT COUNT", ["Rank", "Picker", "Complaint Count", "Unique Orders Impacted", "Percentage"],
-    buildComplaintSummaryRows_(stats.pickers, true, 5, true));
+  addComplaintSection_(output, "TOP 5 PICKERS BY COMPLAINT COUNT", ["Rank", "Picker", "Complaint Count", "Unique Orders Impacted", "Picker Complaint %"],
+    buildComplaintSummaryRows_(stats.pickers, true, 5, true, stats.uniqueOrdersWithComplaints, orderContext.ordersByPicker));
 
-  addComplaintSection_(output, "TOP 5 CUSTOMERS BY COMPLAINT COUNT", ["Rank", "Customer", "Complaint Count", "Unique Orders Impacted", "Percentage"],
-    buildComplaintSummaryRows_(stats.customers, true, 5, true));
+  addComplaintSection_(output, "TOP 5 CUSTOMERS BY COMPLAINT COUNT", ["Rank", "Customer", "Complaint Count", "Unique Orders Impacted", "Customer Complaint %"],
+    buildComplaintSummaryRows_(stats.customers, true, 5, true, stats.uniqueOrdersWithComplaints));
 
-  addComplaintSection_(output, "TOP 5 DAs BY COMPLAINT COUNT", ["Rank", "DA", "Complaint Count", "Unique Orders Impacted", "Percentage"],
-    buildComplaintSummaryRows_(stats.deliveryAgents, true, 5, true));
+  addComplaintSection_(output, "TOP 5 DAs BY COMPLAINT COUNT", ["Rank", "DA", "Complaint Count", "Unique Orders Impacted", "DA Complaint %"],
+    buildComplaintSummaryRows_(stats.deliveryAgents, true, 5, true, stats.uniqueOrdersWithComplaints));
 
   addComplaintSection_(output, "KEY INSIGHTS", ["Insight"], buildComplaintInsightRows_(stats));
 
@@ -2307,14 +2307,25 @@ function buildComplaintIntelligenceRows_(data, totalOrders) {
   return output;
 }
 
-function getTotalOrdersFromRdb_(rdbData) {
-  var totalOrders = 0;
+function getComplaintOrderContextFromRdb_(rdbData) {
+  var context = {
+    totalOrders: 0,
+    ordersByMonth: {},
+    ordersByPicker: {}
+  };
 
   for (var i = 1; i < rdbData.length; i++) {
-    totalOrders += toNumber_(rdbData[i][3]);
+    var dateKey = normalizeDate_(rdbData[i][0]);
+    var monthKey = getMonthKey_(dateKey);
+    var picker = normalizeText_(rdbData[i][1]);
+    var orders = toNumber_(rdbData[i][3]);
+
+    context.totalOrders += orders;
+    if (monthKey) context.ordersByMonth[monthKey] = (context.ordersByMonth[monthKey] || 0) + orders;
+    if (picker) context.ordersByPicker[picker] = (context.ordersByPicker[picker] || 0) + orders;
   }
 
-  return totalOrders;
+  return context;
 }
 
 function getComplaintRecords_(data) {
@@ -2346,7 +2357,7 @@ function getComplaintRecords_(data) {
   return records;
 }
 
-function buildComplaintStats_(records, totalOrders) {
+function buildComplaintStats_(records, orderContext) {
   var totalComplaints = records.length;
   var uniqueOrders = {};
   var stats = {
@@ -2372,14 +2383,14 @@ function buildComplaintStats_(records, totalOrders) {
 
   stats.uniqueOrdersWithComplaints = Object.keys(uniqueOrders).length;
   stats.uniqueOrders = stats.uniqueOrdersWithComplaints;
-  stats.totalOrders = toNumber_(totalOrders);
+  stats.totalOrders = toNumber_(orderContext.totalOrders);
   stats.complaintRate = stats.totalOrders > 0 ? (stats.uniqueOrdersWithComplaints / stats.totalOrders) * 100 : 0;
-  stats.rcaRows = sortComplaintSummary_(stats.rca, totalComplaints);
-  stats.categoryRows = sortComplaintSummary_(stats.categories, totalComplaints);
-  stats.skuRows = sortComplaintSummary_(stats.skus, totalComplaints);
-  stats.pickerRows = sortComplaintSummary_(stats.pickers, totalComplaints);
-  stats.customerRows = sortComplaintSummary_(stats.customers, totalComplaints);
-  stats.daRows = sortComplaintSummary_(stats.deliveryAgents, totalComplaints);
+  stats.rcaRows = sortComplaintSummary_(stats.rca, stats.uniqueOrdersWithComplaints);
+  stats.categoryRows = sortComplaintSummary_(stats.categories, stats.uniqueOrdersWithComplaints);
+  stats.skuRows = sortComplaintSummary_(stats.skus, stats.uniqueOrdersWithComplaints);
+  stats.pickerRows = sortComplaintSummary_(stats.pickers, stats.uniqueOrdersWithComplaints, orderContext.ordersByPicker);
+  stats.customerRows = sortComplaintSummary_(stats.customers, stats.uniqueOrdersWithComplaints);
+  stats.daRows = sortComplaintSummary_(stats.deliveryAgents, stats.uniqueOrdersWithComplaints);
   stats.topRca = stats.rcaRows[0] || {};
   stats.topCategory = stats.categoryRows[0] || {};
   stats.topSku = stats.skuRows[0] || {};
@@ -2403,21 +2414,24 @@ function addComplaintSummaryItem_(summary, key, label, orderId) {
   if (orderId) summary[key].orders[orderId] = true;
 }
 
-function sortComplaintSummary_(summary, totalComplaints) {
+function sortComplaintSummary_(summary, denominator, denominatorLookup) {
   return Object.keys(summary).map(function(key) {
+    var uniqueOrders = Object.keys(summary[key].orders).length;
+    var percentDenominator = denominatorLookup ? toNumber_(denominatorLookup[key]) : toNumber_(denominator);
+
     return {
       key: key,
       label: summary[key].label,
       count: summary[key].count,
-      uniqueOrders: Object.keys(summary[key].orders).length,
-      percent: totalComplaints > 0 ? (summary[key].count / totalComplaints) * 100 : 0
+      uniqueOrders: uniqueOrders,
+      percent: percentDenominator > 0 ? (uniqueOrders / percentDenominator) * 100 : 0
     };
   }).sort(function(a, b) {
     return b.count - a.count || a.key.localeCompare(b.key);
   });
 }
 
-function buildComplaintMonthlyRows_(records) {
+function buildComplaintMonthlyRows_(records, orderContext) {
   var months = {};
 
   records.forEach(function(record) {
@@ -2435,19 +2449,18 @@ function buildComplaintMonthlyRows_(records) {
 
   return Object.keys(months).sort().map(function(monthKey) {
     var uniqueOrders = Object.keys(months[monthKey].orders).length;
+    var totalOrders = toNumber_(orderContext.ordersByMonth[monthKey]);
     return [
       monthKey,
       months[monthKey].count,
       uniqueOrders,
-      uniqueOrders > 0 ? formatComplaintPercent_((months[monthKey].count / uniqueOrders) * 100) : "n/a"
+      totalOrders > 0 ? formatComplaintPercent_((uniqueOrders / totalOrders) * 100) : "n/a"
     ];
   });
 }
 
-function buildComplaintSummaryRows_(summary, ranked, limit, includeUniqueOrders) {
-  var rows = sortComplaintSummary_(summary, Object.keys(summary).reduce(function(total, key) {
-    return total + summary[key].count;
-  }, 0));
+function buildComplaintSummaryRows_(summary, ranked, limit, includeUniqueOrders, denominator, denominatorLookup) {
+  var rows = sortComplaintSummary_(summary, denominator, denominatorLookup);
   var limitedRows = limit > 0 ? rows.slice(0, limit) : rows;
 
   return limitedRows.map(function(row, index) {
@@ -2465,18 +2478,25 @@ function buildComplaintSummaryRows_(summary, ranked, limit, includeUniqueOrders)
 }
 
 function buildComplaintInsightRows_(stats) {
-  var top5SkuCount = stats.skuRows.slice(0, 5).reduce(function(total, row) {
-    return total + row.count;
-  }, 0);
+  var top5SkuOrders = {};
+  stats.skuRows.slice(0, 5).forEach(function(row) {
+    var skuSummary = stats.skus[row.key];
+    Object.keys(skuSummary.orders || {}).forEach(function(orderId) {
+      top5SkuOrders[orderId] = true;
+    });
+  });
+  var top5SkuUniqueOrders = Object.keys(top5SkuOrders).length;
+
   var topCustomer = stats.customerRows[0] || {};
+  var topPicker = stats.pickerRows[0] || {};
 
   return [
-    [(stats.topCategory.key || "No category") + " contributes " + formatComplaintPercent_(stats.topCategory.percent || 0) + " of complaints."],
-    [(stats.topRca.key || "No RCA") + " contributes " + formatComplaintPercent_(stats.topRca.percent || 0) + " of all RCAs."],
-    ["Top 5 SKUs contribute " + formatComplaintPercent_(stats.totalComplaints > 0 ? (top5SkuCount / stats.totalComplaints) * 100 : 0) + " of complaints."],
-    ["Complaint Rate is " + formatComplaintPercent_(stats.complaintRate) + " based on RCA complaint rows per impacted order."],
-    ["Most impacted customer has " + (topCustomer.count || 0) + " complaints."],
-    ["Most impacted picker has " + ((stats.topPicker && stats.topPicker.count) || 0) + " complaints."]
+    [(stats.topCategory.key || "No category") + " contributes " + formatComplaintPercent_(stats.topCategory.percent || 0) + " of unique complaint orders."],
+    [(stats.topRca.key || "No RCA") + " contributes " + formatComplaintPercent_(stats.topRca.percent || 0) + " of unique complaint orders."],
+    ["Top 5 SKUs contribute " + formatComplaintPercent_(stats.uniqueOrdersWithComplaints > 0 ? (top5SkuUniqueOrders / stats.uniqueOrdersWithComplaints) * 100 : 0) + " of unique complaint orders."],
+    ["Complaint Rate is " + formatComplaintPercent_(stats.complaintRate) + " based on unique complaint orders over total RDB orders."],
+    ["Most impacted customer has " + (topCustomer.uniqueOrders || 0) + " unique complaint orders."],
+    ["Most impacted picker has " + ((topPicker && topPicker.uniqueOrders) || 0) + " unique complaint orders."]
   ];
 }
 
