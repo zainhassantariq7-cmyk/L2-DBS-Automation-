@@ -21,7 +21,8 @@ var CONFIG = {
     COMPLAINT_ANALYSIS: "COMPLAINT_ANALYSIS",
     RCA_DATABASE: "YEARLY_RCA_DATABASE",
     WEEKLY_ANALYTICS: "Weekly Analytics",
-    DARK_STORE_GRAPHS: "Dark Store Graphs"
+    DARK_STORE_GRAPHS: "Dark Store Graphs",
+    DARK_STORE_DATA: "DARK_STORE_DATA"
   },
 
   PROPERTIES: {
@@ -44,19 +45,28 @@ var CONFIG = {
 };
 
 var GRAPH_LAYOUT = {
-  ORDER_BAR_ROW: 4,
-  ITEM_BAR_ROW: 40,
-  ORDER_SOURCE_ROW: 130,
-  ITEM_SOURCE_ROW: 170,
-  PERFORMANCE_SOURCE_ROW: 210,
-  DAILY_KPI_SOURCE_ROW: 250,
-  TOP_PICKER_SOURCE_ROW: 280,
-  CHART_COLUMN: 9,
-  ORDER_CHART_ROW: 4,
-  ITEM_CHART_ROW: 40,
-  PERFORMANCE_CHART_ROW: 76,
-  DAILY_KPI_CHART_ROW: 112,
-  TOP_PICKER_CHART_ROW: 148
+  DASHBOARD_MIN_ROWS: 130,
+  DASHBOARD_MIN_COLUMNS: 14,
+  DATA_MIN_ROWS: 220,
+  DATA_MIN_COLUMNS: 12,
+  ORDER_SOURCE_ROW: 1,
+  ITEM_SOURCE_ROW: 35,
+  PERFORMANCE_SOURCE_ROW: 70,
+  DAILY_KPI_SOURCE_ROW: 105,
+  TOP_PICKER_SOURCE_ROW: 125,
+  PRODUCTIVITY_SOURCE_ROW: 145,
+  PEAK_HOUR_SOURCE_ROW: 160,
+  HEATMAP_SOURCE_ROW: 175,
+  SUMMARY_ROW: 8,
+  PRODUCTIVITY_ROW: 15,
+  ORDERS_CHART_ROW: 24,
+  ITEMS_CHART_ROW: 24,
+  SPEED_CHART_ROW: 45,
+  VARIANCE_ROW: 45,
+  SLA_ROW: 65,
+  PEAK_HOUR_ROW: 65,
+  PICKER_ROW: 78,
+  HEATMAP_ROW: 96
 };
 
 var MTD_COMPLAINT_SCORING = {
@@ -544,26 +554,41 @@ function updateWeeklyAnalytics() {
 function updateDarkStoreDashboard() {
   var ss = SpreadsheetApp.openById(CONFIG.DEST_ID);
   var graphsSheet = getOrCreateSheet_(ss, CONFIG.SHEETS.DARK_STORE_GRAPHS);
+  var dataSheet = getOrCreateSheet_(ss, CONFIG.SHEETS.DARK_STORE_DATA);
   var hourlySheet = getRequiredSheet_(ss, CONFIG.SHEETS.RDB_HOURLY);
   var mtdSheet = getRequiredSheet_(ss, CONFIG.SHEETS.MTD_DASHBOARD);
   var rdbSheet = getRequiredSheet_(ss, CONFIG.SHEETS.RDB);
-
-  prepareGraphsSheet_(graphsSheet);
 
   var allHourlyRows = getAllHourlyRows_(hourlySheet);
   var hourlyRows = getLatestHourlyRowsFromRows_(allHourlyRows);
   var latestDate = hourlyRows.length > 0 ? hourlyRows[0].dateKey : "";
   var comparisonDate = latestDate ? addDaysToDateKey_(latestDate, -7) : "";
+  var comparisonHourlyRows = getHourlyRowsForDate_(allHourlyRows, comparisonDate);
   var mtdRows = getMtdDashboardRows_(mtdSheet);
   var orderMatrix = buildHourlyMetricComparisonMatrix_(allHourlyRows, "orders", latestDate, comparisonDate);
   var itemMatrix = buildHourlyMetricComparisonMatrix_(allHourlyRows, "items", latestDate, comparisonDate);
   var performanceRows = buildHourlyPerformanceRows_(hourlyRows);
   var dailyComparisonRows = buildDailyComparisonRows_(rdbSheet, latestDate, comparisonDate);
+  var dailySummaryRows = buildDailyPerformanceSummaryRows_(dailyComparisonRows);
+  var productivityRows = buildProductivityKpiRows_(dailyComparisonRows, hourlyRows, comparisonHourlyRows);
+  var peakHourRows = buildPeakHourAnalysisRows_(hourlyRows, comparisonHourlyRows);
+  var heatmapRows = buildHourlyHeatmapRows_(orderMatrix, itemMatrix, performanceRows);
 
-  renderGraphsHeader_(graphsSheet, latestDate, comparisonDate);
-  renderTopBarViews_(graphsSheet, orderMatrix, itemMatrix);
-  renderGraphSourceTables_(graphsSheet, orderMatrix, itemMatrix, performanceRows, dailyComparisonRows, mtdRows);
-  insertDashboardCharts_(graphsSheet, hourlyRows, mtdRows, orderMatrix, itemMatrix, performanceRows, dailyComparisonRows);
+  resetDashboardSheet_(graphsSheet);
+  prepareDarkStoreDataSheet_(dataSheet);
+  renderGraphSourceTables_(dataSheet, orderMatrix, itemMatrix, performanceRows, dailyComparisonRows, mtdRows, productivityRows, peakHourRows, heatmapRows);
+
+  renderGraphsHeader_(graphsSheet, latestDate, comparisonDate, dailySummaryRows);
+  renderHeaderMetrics_(graphsSheet, latestDate, comparisonDate, dailyComparisonRows);
+  renderDailyPerformanceSummary_(graphsSheet, dailySummaryRows);
+  renderProductivityKpiCards_(graphsSheet, productivityRows);
+  renderDashboardChartsArea_(graphsSheet);
+  insertDashboardCharts_(graphsSheet, dataSheet, orderMatrix, itemMatrix, performanceRows);
+  renderVarianceAnalysisTable_(graphsSheet, dailyComparisonRows);
+  renderSlaMonitor_(graphsSheet, dailyComparisonRows);
+  renderPeakHourAnalysis_(graphsSheet, peakHourRows);
+  renderTopPickerMtdRanking_(graphsSheet, mtdRows);
+  renderHourlyHeatmap_(graphsSheet, heatmapRows);
 }
 
 function resetDashboardSheet_(sheet) {
@@ -572,13 +597,22 @@ function resetDashboardSheet_(sheet) {
   });
   sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).breakApart();
   sheet.clear();
-  ensureSheetSize_(sheet, 145, 45);
-  sheet.setFrozenRows(2);
+  ensureSheetSize_(sheet, GRAPH_LAYOUT.DASHBOARD_MIN_ROWS, GRAPH_LAYOUT.DASHBOARD_MIN_COLUMNS);
+  sheet.setFrozenRows(6);
   sheet.setHiddenGridlines(true);
+  sheet.setTabColor("#0b1f3a");
 }
 
 function prepareGraphsSheet_(sheet) {
-  ensureSheetSize_(sheet, 310, 45);
+  resetDashboardSheet_(sheet);
+}
+
+function prepareDarkStoreDataSheet_(sheet) {
+  sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).breakApart();
+  sheet.clear();
+  ensureSheetSize_(sheet, GRAPH_LAYOUT.DATA_MIN_ROWS, GRAPH_LAYOUT.DATA_MIN_COLUMNS);
+  sheet.setHiddenGridlines(true);
+  sheet.hideSheet();
 }
 
 function getLatestHourlyRows_(hourlySheet) {
@@ -637,6 +671,16 @@ function getLatestHourlyRowsFromRows_(allHourlyRows) {
   });
 
   return rows;
+}
+
+function getHourlyRowsForDate_(allHourlyRows, dateKey) {
+  if (!dateKey) return [];
+
+  return allHourlyRows.filter(function(row) {
+    return row.dateKey === dateKey;
+  }).sort(function(a, b) {
+    return a.hour - b.hour;
+  });
 }
 
 function buildHourlyMetricMatrix_(hourlyRows, metricName) {
@@ -836,106 +880,162 @@ function getMtdDashboardRows_(mtdSheet) {
   return rows;
 }
 
-function renderGraphsHeader_(sheet, latestDate, comparisonDate) {
-  sheet.getRange("A1").setValue("DARK STORE HOURLY GRAPHS");
-  sheet.getRange("A2").setValue("Comparing latest day " + (latestDate || "-") + " vs same day last week " + (comparisonDate || "-") + " | Graphs update when runAll/createTrigger runs");
+function renderGraphsHeader_(sheet, latestDate, comparisonDate, dailySummaryRows) {
+  var refreshedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+  var overall = getOverallPerformanceStatus_(dailySummaryRows);
+
+  sheet.getRange("A1:N1")
+    .merge()
+    .setValue("RUHDS48 | DARK STORE EXECUTIVE PERFORMANCE DASHBOARD")
+    .setBackground("#0b1f3a")
+    .setFontColor("#ffffff")
+    .setFontWeight("bold")
+    .setFontSize(18)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+
+  sheet.getRange("A2:N2")
+    .merge()
+    .setValue(buildExecutiveBannerText_(dailySummaryRows))
+    .setBackground("#12355b")
+    .setFontColor("#ffffff")
+    .setFontWeight("bold")
+    .setFontSize(11)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+
+  sheet.getRange("A3:N3")
+    .merge()
+    .setValue("Overall Status: " + overall.label + " | Latest Available Date: " + (latestDate || "-") + " | Same Day Last Week: " + (comparisonDate || "-") + " | Last Refresh: " + refreshedAt)
+    .setBackground(overall.color)
+    .setFontColor("#ffffff")
+    .setFontWeight("bold")
+    .setFontSize(12)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+
+  sheet.setRowHeights(1, 3, 30);
 }
 
-function renderTopBarViews_(sheet, orderMatrix, itemMatrix) {
-  renderBarComparisonTable_(
-    sheet,
-    GRAPH_LAYOUT.ORDER_BAR_ROW,
-    1,
-    "Hourly Orders: Latest Day vs Same Day Last Week",
-    orderMatrix,
-    "#64748b",
-    "#2563eb"
-  );
-  renderBarComparisonTable_(
-    sheet,
-    GRAPH_LAYOUT.ITEM_BAR_ROW,
-    1,
-    "Hourly Items: Latest Day vs Same Day Last Week",
-    itemMatrix,
-    "#64748b",
-    "#16a34a"
-  );
+function renderHeaderMetrics_(sheet, latestDate, comparisonDate, dailyComparisonRows) {
+  var orders = getDailyComparisonValue_(dailyComparisonRows, "Orders");
+  var items = getDailyComparisonValue_(dailyComparisonRows, "Items");
+  var metrics = [
+    ["Last Refresh Time", Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss")],
+    ["Latest Data Date", latestDate || "-"],
+    ["Same Day Last Week Date", comparisonDate || "-"],
+    ["Total Orders Today", formatKpiValue_(orders.today, "integer")],
+    ["Total Orders Last Week", formatKpiValue_(orders.lastWeek, "integer")],
+    ["Total Items Today", formatKpiValue_(items.today, "integer")],
+    ["Total Items Last Week", formatKpiValue_(items.lastWeek, "integer")]
+  ];
+
+  metrics.forEach(function(metric, index) {
+    var column = 1 + (index * 2);
+    sheet.getRange(4, column, 1, 2)
+      .merge()
+      .setValue(metric[0])
+      .setBackground("#d9eaf7")
+      .setFontColor("#0b1f3a")
+      .setFontWeight("bold")
+      .setFontSize(9)
+      .setHorizontalAlignment("center");
+    sheet.getRange(5, column, 1, 2)
+      .merge()
+      .setValue(metric[1])
+      .setBackground("#f8fafc")
+      .setFontColor("#0f172a")
+      .setFontWeight("bold")
+      .setFontSize(10)
+      .setHorizontalAlignment("center");
+  });
+
+  sheet.getRange("A4:N5").setBorder(true, true, true, true, true, true, "#94a3b8", SpreadsheetApp.BorderStyle.SOLID);
 }
 
-function renderBarComparisonTable_(sheet, startRow, startColumn, title, matrix, previousColor, latestColor) {
-  if (!matrix || matrix.length < 2) return;
-
-  var previousMax = getColumnMax_(matrix, 1);
-  var latestMax = getColumnMax_(matrix, 2);
-  var rows = [[
-    "Hour",
-    matrix[0][1],
-    "Last Week Bar",
-    matrix[0][2],
-    "Latest Day Bar",
-    "Variance",
-    "Variance %"
-  ]];
-
-  for (var i = 1; i < matrix.length; i++) {
-    var variancePercent = matrix[i][1] !== 0
-      ? (matrix[i][3] / matrix[i][1]) * 100
-      : "";
-
-    rows.push([
-      matrix[i][0],
-      matrix[i][1],
-      barText_(matrix[i][1], previousMax),
-      matrix[i][2],
-      barText_(matrix[i][2], latestMax),
-      matrix[i][3],
-      variancePercent === "" ? "" : round2_(variancePercent)
-    ]);
-  }
-
-  ensureSheetSize_(sheet, startRow + rows.length + 2, startColumn + rows[0].length + 1);
-  sheet.getRange(startRow, startColumn, rows.length + 1, rows[0].length).clearContent();
-  sheet.getRange(startRow, startColumn).setValue(title);
-  sheet.getRange(startRow + 1, startColumn, rows.length, rows[0].length).setValues(rows);
+function renderDailyPerformanceSummary_(sheet, dailySummaryRows) {
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.SUMMARY_ROW - 1, 1, 14, "DAILY PERFORMANCE SUMMARY", "#0f172a");
+  renderKpiCards_(sheet, GRAPH_LAYOUT.SUMMARY_ROW, dailySummaryRows, 2);
 }
 
-function getColumnMax_(matrix, columnIndex) {
-  var maxValue = 0;
-
-  for (var i = 1; i < matrix.length; i++) {
-    maxValue = Math.max(maxValue, toNumber_(matrix[i][columnIndex]));
-  }
-
-  return maxValue;
+function renderProductivityKpiCards_(sheet, productivityRows) {
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.PRODUCTIVITY_ROW - 1, 1, 12, "PRODUCTIVITY KPI CARDS", "#14532d");
+  renderKpiCards_(sheet, GRAPH_LAYOUT.PRODUCTIVITY_ROW, productivityRows, 3);
 }
 
-function barText_(value, maxValue) {
-  if (maxValue <= 0 || value <= 0) return "";
-
-  return repeatText_("#", Math.max(1, Math.round((value / maxValue) * 20)));
+function renderDashboardChartsArea_(sheet) {
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.ORDERS_CHART_ROW - 2, 1, 7, "HOURLY ORDERS TREND | TODAY VS SAME DAY LAST WEEK", "#1d4ed8");
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.ITEMS_CHART_ROW - 2, 8, 7, "HOURLY ITEMS TREND | TODAY VS SAME DAY LAST WEEK", "#15803d");
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.SPEED_CHART_ROW - 2, 1, 7, "HOURLY SPEED TREND | AT / PT / PKT / P95", "#7e22ce");
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.VARIANCE_ROW - 2, 8, 7, "VARIANCE ANALYSIS TABLE", "#0f172a");
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.SLA_ROW - 2, 1, 6, "SLA MONITOR", "#b45309");
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.PEAK_HOUR_ROW - 2, 8, 7, "PEAK HOUR ANALYSIS", "#0369a1");
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.PICKER_ROW - 1, 1, 14, "TOP PICKER MTD RANKING", "#14532d");
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.HEATMAP_ROW - 1, 1, 14, "HOURLY HEATMAP | PEAK AND WEAK PERFORMANCE HOURS", "#991b1b");
 }
 
-function repeatText_(text, count) {
-  var output = "";
-
-  for (var i = 0; i < count; i++) {
-    output += text;
-  }
-
-  return output;
+function renderDashboardSectionTitle_(sheet, row, column, numColumns, title, color) {
+  sheet.getRange(row, column, 1, numColumns)
+    .merge()
+    .setValue(title)
+    .setBackground(color)
+    .setFontColor("#ffffff")
+    .setFontWeight("bold")
+    .setFontSize(11)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+  sheet.setRowHeight(row, 26);
 }
 
-function renderGraphSourceTables_(sheet, orderMatrix, itemMatrix, performanceRows, dailyComparisonRows, mtdRows) {
+function renderKpiCards_(sheet, startRow, kpiRows, cardWidth) {
+  kpiRows.forEach(function(kpi, index) {
+    var column = 1 + (index * cardWidth);
+    var cardRange = sheet.getRange(startRow, column, 5, cardWidth);
+    var titleRange = sheet.getRange(startRow, column, 1, cardWidth);
+    var todayRange = sheet.getRange(startRow + 1, column, 1, cardWidth);
+    var lastWeekRange = sheet.getRange(startRow + 2, column, 1, cardWidth);
+    var varianceRange = sheet.getRange(startRow + 3, column, 1, cardWidth);
+    var statusRange = sheet.getRange(startRow + 4, column, 1, cardWidth);
+
+    titleRange.merge().setValue(kpi.metric);
+    todayRange.merge().setValue("Today: " + kpi.todayText);
+    lastWeekRange.merge().setValue("Last Week: " + kpi.lastWeekText);
+    varianceRange.merge().setValue("Variance: " + kpi.varianceText);
+    statusRange.merge().setValue("Status: " + kpi.indicator + " " + kpi.status);
+
+    cardRange
+      .setBackground("#ffffff")
+      .setFontColor("#0f172a")
+      .setHorizontalAlignment("center")
+      .setVerticalAlignment("middle")
+      .setWrap(true)
+      .setBorder(true, true, true, true, true, true, "#cbd5e1", SpreadsheetApp.BorderStyle.SOLID);
+
+    titleRange
+      .setBackground("#e2e8f0")
+      .setFontWeight("bold")
+      .setFontSize(10);
+    todayRange.setFontWeight("bold").setFontSize(10);
+    lastWeekRange.setFontSize(9);
+    varianceRange.setFontWeight("bold").setFontColor(kpi.color);
+    statusRange
+      .setBackground(kpi.background)
+      .setFontColor(kpi.color)
+      .setFontWeight("bold");
+  });
+
+  sheet.setRowHeights(startRow, 5, 24);
+}
+
+function renderGraphSourceTables_(sheet, orderMatrix, itemMatrix, performanceRows, dailyComparisonRows, mtdRows, productivityRows, peakHourRows, heatmapRows) {
   renderDashboardMatrix_(sheet, GRAPH_LAYOUT.ORDER_SOURCE_ROW, 1, "Hourly Orders Source Data", orderMatrix, "#1f4e79");
   renderDashboardMatrix_(sheet, GRAPH_LAYOUT.ITEM_SOURCE_ROW, 1, "Hourly Items Source Data", itemMatrix, "#548235");
   renderDashboardMatrix_(sheet, GRAPH_LAYOUT.PERFORMANCE_SOURCE_ROW, 1, "Latest Date Speed / SLA Source Data", performanceRows, "#7030a0");
   renderDashboardMatrix_(sheet, GRAPH_LAYOUT.DAILY_KPI_SOURCE_ROW, 1, "Daily KPI Source Data", dailyComparisonRows, "#0b1f3a");
-  var topRows = [["Picker", "MTD Score"]].concat(
-    mtdRows.slice(0, 5).map(function(row, index) {
-      return [row.picker, row.score];
-    })
-  );
-  renderDashboardMatrix_(sheet, GRAPH_LAYOUT.TOP_PICKER_SOURCE_ROW, 1, "Top Picker MTD Score", topRows, "#14532d");
+  renderDashboardMatrix_(sheet, GRAPH_LAYOUT.TOP_PICKER_SOURCE_ROW, 1, "Top Picker MTD Source Data", buildTopPickerSourceRows_(mtdRows), "#14532d");
+  renderDashboardMatrix_(sheet, GRAPH_LAYOUT.PRODUCTIVITY_SOURCE_ROW, 1, "Productivity KPI Source Data", kpiRowsToTable_(productivityRows), "#14532d");
+  renderDashboardMatrix_(sheet, GRAPH_LAYOUT.PEAK_HOUR_SOURCE_ROW, 1, "Peak Hour Analysis Source Data", peakHourRows, "#0369a1");
+  renderDashboardMatrix_(sheet, GRAPH_LAYOUT.HEATMAP_SOURCE_ROW, 1, "Hourly Heatmap Source Data", heatmapRows, "#991b1b");
 }
 
 function renderDashboardMatrix_(sheet, startRow, startColumn, title, values, color) {
@@ -943,140 +1043,560 @@ function renderDashboardMatrix_(sheet, startRow, startColumn, title, values, col
 
   ensureSheetSize_(sheet, startRow + values.length + 2, startColumn + values[0].length + 1);
   sheet.getRange(startRow, startColumn, values.length + 1, values[0].length).clearContent();
-  sheet.getRange(startRow, startColumn).setValue(title);
+  sheet.getRange(startRow, startColumn)
+    .setValue(title)
+    .setBackground(color || "#0b1f3a")
+    .setFontColor("#ffffff")
+    .setFontWeight("bold");
   sheet.getRange(startRow + 1, startColumn, values.length, values[0].length).setValues(values);
 }
 
-function insertDashboardCharts_(sheet, hourlyRows, mtdRows, orderMatrix, itemMatrix, performanceRows, dailyComparisonRows) {
+function insertDashboardCharts_(dashboardSheet, dataSheet, orderMatrix, itemMatrix, performanceRows) {
   if (orderMatrix.length > 1 && orderMatrix[0].length > 1) {
-    upsertDashboardChart_(
-      sheet,
-      "Hourly Order Flow by Date",
-      Charts.ChartType.COLUMN,
-      sheet.getRange(GRAPH_LAYOUT.ORDER_SOURCE_ROW + 1, 1, orderMatrix.length, Math.min(orderMatrix[0].length, 3)),
-      GRAPH_LAYOUT.ORDER_CHART_ROW,
-      GRAPH_LAYOUT.CHART_COLUMN,
+    insertDarkStoreLineChart_(
+      dashboardSheet,
+      "Hourly Orders | Today vs Same Day Last Week",
+      dataSheet.getRange(GRAPH_LAYOUT.ORDER_SOURCE_ROW + 1, 1, orderMatrix.length, Math.min(orderMatrix[0].length, 3)),
+      GRAPH_LAYOUT.ORDERS_CHART_ROW,
+      1,
       {
         hAxisTitle: "Hour",
         vAxisTitle: "Orders",
-        colors: ["#64748b", "#2563eb"]
+        colors: ["#64748b", "#2563eb"],
+        width: 640,
+        height: 330
       }
     );
   }
 
   if (itemMatrix.length > 1 && itemMatrix[0].length > 1) {
-    upsertDashboardChart_(
-      sheet,
-      "Hourly Item Flow by Date",
-      Charts.ChartType.COLUMN,
-      sheet.getRange(GRAPH_LAYOUT.ITEM_SOURCE_ROW + 1, 1, itemMatrix.length, Math.min(itemMatrix[0].length, 3)),
-      GRAPH_LAYOUT.ITEM_CHART_ROW,
-      GRAPH_LAYOUT.CHART_COLUMN,
+    insertDarkStoreLineChart_(
+      dashboardSheet,
+      "Hourly Items | Today vs Same Day Last Week",
+      dataSheet.getRange(GRAPH_LAYOUT.ITEM_SOURCE_ROW + 1, 1, itemMatrix.length, Math.min(itemMatrix[0].length, 3)),
+      GRAPH_LAYOUT.ITEMS_CHART_ROW,
+      8,
       {
         hAxisTitle: "Hour",
         vAxisTitle: "Items",
-        colors: ["#64748b", "#16a34a"]
+        colors: ["#64748b", "#16a34a"],
+        width: 640,
+        height: 330
       }
     );
   }
 
   if (performanceRows.length > 1) {
-    upsertDashboardChart_(
-      sheet,
-      "Latest Date AT / PT / PKT / P95 by Hour",
-      Charts.ChartType.COLUMN,
-      sheet.getRange(GRAPH_LAYOUT.PERFORMANCE_SOURCE_ROW + 1, 1, performanceRows.length, performanceRows[0].length),
-      GRAPH_LAYOUT.PERFORMANCE_CHART_ROW,
-      GRAPH_LAYOUT.CHART_COLUMN,
+    insertDarkStoreLineChart_(
+      dashboardSheet,
+      "Hourly Speed Trend | AT / PT / PKT / P95",
+      dataSheet.getRange(GRAPH_LAYOUT.PERFORMANCE_SOURCE_ROW + 1, 1, performanceRows.length, performanceRows[0].length),
+      GRAPH_LAYOUT.SPEED_CHART_ROW,
+      1,
       {
         hAxisTitle: "Hour",
-        vAxisTitle: "Time",
-        colors: ["#2563eb", "#ca8a04", "#ea580c", "#dc2626"]
+        vAxisTitle: "Minutes",
+        colors: ["#2563eb", "#ca8a04", "#ea580c", "#dc2626"],
+        width: 640,
+        height: 340
       }
     );
   }
 
-  if (dailyComparisonRows.length > 1) {
-    upsertDashboardChart_(
-      sheet,
-      "Latest Day vs Same Day Last Week - KPI Comparison",
-      Charts.ChartType.COLUMN,
-      sheet.getRange(GRAPH_LAYOUT.DAILY_KPI_SOURCE_ROW + 1, 1, dailyComparisonRows.length, 3),
-      GRAPH_LAYOUT.DAILY_KPI_CHART_ROW,
-      GRAPH_LAYOUT.CHART_COLUMN,
-      {
-        hAxisTitle: "KPI",
-        vAxisTitle: "Value",
-        colors: ["#64748b", "#2563eb"]
-      }
-    );
-  }
-
-  if (mtdRows.length > 0) {
-    upsertDashboardChart_(
-      sheet,
-      "Top Picker MTD Score",
-      Charts.ChartType.BAR,
-      sheet.getRange(GRAPH_LAYOUT.TOP_PICKER_SOURCE_ROW + 1, 1, Math.min(mtdRows.length, 5) + 1, 2),
-      GRAPH_LAYOUT.TOP_PICKER_CHART_ROW,
-      GRAPH_LAYOUT.CHART_COLUMN,
-      {
-        hAxisTitle: "MTD Score",
-        vAxisTitle: "Picker",
-        colors: ["#16a34a"]
-      }
-    );
-  }
-
-  sheet.autoResizeColumns(1, 14);
+  dashboardSheet.autoResizeColumns(1, 14);
 }
 
-function upsertDashboardChart_(sheet, title, chartType, range, defaultRow, defaultColumn, options) {
-  var existingChart = findChartByTitle_(sheet, title);
+function insertDarkStoreLineChart_(sheet, title, range, row, column, options) {
+  var chart = sheet.newChart()
+    .setChartType(Charts.ChartType.LINE)
+    .addRange(range)
+    .setOption("title", title)
+    .setOption("legend", { position: "bottom" })
+    .setOption("hAxis", { title: options.hAxisTitle })
+    .setOption("vAxis", { title: options.vAxisTitle })
+    .setOption("colors", options.colors || ["#2563eb", "#16a34a"])
+    .setOption("lineWidth", 3)
+    .setOption("pointSize", 4)
+    .setOption("width", options.width || 620)
+    .setOption("height", options.height || 320)
+    .setPosition(row, column, 0, 0)
+    .build();
 
-  if (existingChart) {
-    var builder = existingChart.modify().clearRanges().addRange(range);
-    var container = existingChart.getContainerInfo();
-    builder.setPosition(
-      container.getAnchorRow(),
-      container.getAnchorColumn(),
-      container.getOffsetX(),
-      container.getOffsetY()
-    );
-    sheet.updateChart(builder.build());
-  } else {
-    var newBuilder = sheet.newChart()
-      .setChartType(chartType)
-      .addRange(range)
-      .setOption("title", title)
-      .setOption("legend", { position: "right" })
-      .setOption("hAxis", { title: options.hAxisTitle })
-      .setOption("vAxis", { title: options.vAxisTitle })
-      .setOption("colors", options.colors || ["#2563eb", "#16a34a"])
-      .setPosition(defaultRow, defaultColumn, 0, 0);
+  sheet.insertChart(chart);
+}
 
-    sheet.insertChart(newBuilder.build());
+function renderVarianceAnalysisTable_(sheet, dailyComparisonRows) {
+  var values = [["Metric", "Today", "Last Week", "Difference", "Variance %"]];
+
+  for (var i = 1; i < dailyComparisonRows.length; i++) {
+    values.push([
+      dailyComparisonRows[i][0],
+      dailyComparisonRows[i][2],
+      dailyComparisonRows[i][1],
+      dailyComparisonRows[i][3],
+      dailyComparisonRows[i][4] === "" ? "" : formatVarianceText_(dailyComparisonRows[i][4])
+    ]);
+  }
+
+  var startRow = GRAPH_LAYOUT.VARIANCE_ROW;
+  sheet.getRange(startRow, 8, values.length, values[0].length).setValues(values);
+  formatDashboardTable_(sheet, startRow, 8, values.length, values[0].length, "#0f172a");
+
+  for (var row = 1; row < values.length; row++) {
+    var metricName = values[row][0];
+    var diff = toNumber_(values[row][3]);
+    var higherIsBetter = isHigherBetterMetric_(metricName);
+    var trend = getTrendIndicator_(diff, higherIsBetter);
+    sheet.getRange(startRow + row, 12).setFontColor(trend.color).setFontWeight("bold");
   }
 }
 
-function findChartByTitle_(sheet, title) {
-  var charts = sheet.getCharts();
+function renderSlaMonitor_(sheet, dailyComparisonRows) {
+  var rows = [["Metric", "Today", "Target", "Status"]];
+  [
+    ["AT", "Avg AT", 5],
+    ["PT", "Avg PT", 11],
+    ["PKT", "Avg PKT", 5],
+    ["P95", "Avg P95", 2]
+  ].forEach(function(definition) {
+    var metric = getDailyComparisonValue_(dailyComparisonRows, definition[1]);
+    var met = metric.today <= definition[2];
+    rows.push([
+      definition[0],
+      round2_(metric.today),
+      "<= " + definition[2],
+      met ? "GREEN | Target Met" : "RED | Target Missed"
+    ]);
+  });
 
-  for (var i = 0; i < charts.length; i++) {
-    if (getChartTitle_(charts[i]) === title) {
-      return charts[i];
+  var startRow = GRAPH_LAYOUT.SLA_ROW;
+  sheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
+  formatDashboardTable_(sheet, startRow, 1, rows.length, rows[0].length, "#b45309");
+
+  for (var i = 1; i < rows.length; i++) {
+    var statusRange = sheet.getRange(startRow + i, 4);
+    var metTarget = rows[i][3].indexOf("GREEN") === 0;
+    statusRange
+      .setBackground(metTarget ? "#dcfce7" : "#fee2e2")
+      .setFontColor(metTarget ? "#166534" : "#991b1b")
+      .setFontWeight("bold");
+  }
+}
+
+function renderPeakHourAnalysis_(sheet, peakHourRows) {
+  var startRow = GRAPH_LAYOUT.PEAK_HOUR_ROW;
+  sheet.getRange(startRow, 8, peakHourRows.length, peakHourRows[0].length).setValues(peakHourRows);
+  formatDashboardTable_(sheet, startRow, 8, peakHourRows.length, peakHourRows[0].length, "#0369a1");
+
+  for (var i = 1; i < peakHourRows.length; i++) {
+    var status = normalizeText_(peakHourRows[i][5]);
+    var color = status.indexOf("Improved") >= 0 ? "#166534" : status.indexOf("Declined") >= 0 ? "#991b1b" : "#475569";
+    var background = status.indexOf("Improved") >= 0 ? "#dcfce7" : status.indexOf("Declined") >= 0 ? "#fee2e2" : "#f1f5f9";
+    sheet.getRange(startRow + i, 13)
+      .setBackground(background)
+      .setFontColor(color)
+      .setFontWeight("bold");
+  }
+}
+
+function renderTopPickerMtdRanking_(sheet, mtdRows) {
+  var rows = [["Rank", "Picker", "MTD Score", "Orders", "Items", "Complaints", "Complaint %"]];
+
+  mtdRows.slice(0, 10).forEach(function(row) {
+    rows.push([
+      row.rank,
+      row.picker,
+      row.score,
+      row.orders,
+      row.items,
+      row.complaints,
+      row.complaintPercent
+    ]);
+  });
+
+  var startRow = GRAPH_LAYOUT.PICKER_ROW;
+  sheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
+  formatDashboardTable_(sheet, startRow, 1, rows.length, rows[0].length, "#14532d");
+}
+
+function renderHourlyHeatmap_(sheet, heatmapRows) {
+  if (!heatmapRows || heatmapRows.length === 0) return;
+
+  var startRow = GRAPH_LAYOUT.HEATMAP_ROW;
+  var numRows = heatmapRows.length;
+  var numColumns = heatmapRows[0].length;
+  sheet.getRange(startRow, 1, numRows, numColumns).setValues(heatmapRows);
+  formatDashboardTable_(sheet, startRow, 1, numRows, numColumns, "#991b1b");
+
+  var maxOrders = getTableColumnMax_(heatmapRows, 2);
+  var maxItems = getTableColumnMax_(heatmapRows, 5);
+  var backgrounds = [];
+
+  for (var r = 1; r < heatmapRows.length; r++) {
+    var rowBackgrounds = [];
+    for (var c = 0; c < numColumns; c++) rowBackgrounds.push("#ffffff");
+
+    rowBackgrounds[2] = greenScaleColor_(toNumber_(heatmapRows[r][2]), 0, maxOrders);
+    rowBackgrounds[5] = greenScaleColor_(toNumber_(heatmapRows[r][5]), 0, maxItems);
+    rowBackgrounds[3] = heatmapRows[r][3] > 0 ? "#dcfce7" : heatmapRows[r][3] < 0 ? "#fee2e2" : "#f8fafc";
+    rowBackgrounds[6] = heatmapRows[r][6] > 0 ? "#dcfce7" : heatmapRows[r][6] < 0 ? "#fee2e2" : "#f8fafc";
+    rowBackgrounds[7] = thresholdColor_(toNumber_(heatmapRows[r][7]), 5, true);
+    rowBackgrounds[8] = thresholdColor_(toNumber_(heatmapRows[r][8]), 11, true);
+    rowBackgrounds[9] = thresholdColor_(toNumber_(heatmapRows[r][9]), 5, true);
+    rowBackgrounds[10] = thresholdColor_(toNumber_(heatmapRows[r][10]), 2, true);
+    backgrounds.push(rowBackgrounds);
+  }
+
+  if (backgrounds.length > 0) {
+    sheet.getRange(startRow + 1, 1, backgrounds.length, numColumns).setBackgrounds(backgrounds);
+  }
+}
+
+function formatDashboardTable_(sheet, row, column, numRows, numColumns, headerColor) {
+  var range = sheet.getRange(row, column, numRows, numColumns);
+  range
+    .setFontFamily("Arial")
+    .setFontSize(9)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle")
+    .setWrap(true)
+    .setBorder(true, true, true, true, true, true, "#cbd5e1", SpreadsheetApp.BorderStyle.SOLID);
+
+  sheet.getRange(row, column, 1, numColumns)
+    .setBackground(headerColor)
+    .setFontColor("#ffffff")
+    .setFontWeight("bold");
+}
+
+function buildDailyPerformanceSummaryRows_(dailyComparisonRows) {
+  return [
+    { metric: "Orders", sourceMetric: "Orders", higherIsBetter: true, valueType: "integer" },
+    { metric: "Items", sourceMetric: "Items", higherIsBetter: true, valueType: "integer" },
+    { metric: "AT", sourceMetric: "Avg AT", higherIsBetter: false, valueType: "decimal" },
+    { metric: "PT", sourceMetric: "Avg PT", higherIsBetter: false, valueType: "decimal" },
+    { metric: "PKT", sourceMetric: "Avg PKT", higherIsBetter: false, valueType: "decimal" },
+    { metric: "P95", sourceMetric: "Avg P95", higherIsBetter: false, valueType: "decimal" },
+    { metric: "Complaints", sourceMetric: "Complaints", higherIsBetter: false, valueType: "integer" }
+  ].map(function(definition) {
+    return buildKpiRow_(definition, dailyComparisonRows);
+  });
+}
+
+function buildProductivityKpiRows_(dailyComparisonRows, latestHourlyRows, comparisonHourlyRows) {
+  var orders = getDailyComparisonValue_(dailyComparisonRows, "Orders");
+  var items = getDailyComparisonValue_(dailyComparisonRows, "Items");
+  var complaints = getDailyComparisonValue_(dailyComparisonRows, "Complaints");
+  var latestHours = getActiveHourCount_(latestHourlyRows);
+  var comparisonHours = getActiveHourCount_(comparisonHourlyRows);
+  var definitions = [
+    {
+      metric: "Orders per Hour",
+      today: latestHours > 0 ? orders.today / latestHours : 0,
+      lastWeek: comparisonHours > 0 ? orders.lastWeek / comparisonHours : 0,
+      higherIsBetter: true,
+      valueType: "decimal"
+    },
+    {
+      metric: "Items per Hour",
+      today: latestHours > 0 ? items.today / latestHours : 0,
+      lastWeek: comparisonHours > 0 ? items.lastWeek / comparisonHours : 0,
+      higherIsBetter: true,
+      valueType: "decimal"
+    },
+    {
+      metric: "Average Items per Order",
+      today: orders.today > 0 ? items.today / orders.today : 0,
+      lastWeek: orders.lastWeek > 0 ? items.lastWeek / orders.lastWeek : 0,
+      higherIsBetter: true,
+      valueType: "decimal"
+    },
+    {
+      metric: "Complaint %",
+      today: orders.today > 0 ? (complaints.today / orders.today) * 100 : 0,
+      lastWeek: orders.lastWeek > 0 ? (complaints.lastWeek / orders.lastWeek) * 100 : 0,
+      higherIsBetter: false,
+      valueType: "percent"
+    }
+  ];
+
+  return definitions.map(function(definition) {
+    return buildKpiFromValues_(definition);
+  });
+}
+
+function buildPeakHourAnalysisRows_(latestHourlyRows, comparisonHourlyRows) {
+  var definitions = [
+    ["Peak Orders Hour", "orders", true, true, "integer"],
+    ["Peak Items Hour", "items", true, true, "integer"],
+    ["Worst AT Hour", "at", true, false, "decimal"],
+    ["Worst PT Hour", "pt", true, false, "decimal"]
+  ];
+  var rows = [["Metric", "Today Hour", "Today Value", "Last Week Hour", "Last Week Value", "Status"]];
+
+  definitions.forEach(function(definition) {
+    var todayPeak = findHourlyExtreme_(latestHourlyRows, definition[1], definition[2]);
+    var lastWeekPeak = findHourlyExtreme_(comparisonHourlyRows, definition[1], definition[2]);
+    var trend = getTrendIndicator_(todayPeak.value - lastWeekPeak.value, definition[3]);
+    rows.push([
+      definition[0],
+      todayPeak.hour === "" ? "-" : todayPeak.hour + ":00",
+      formatKpiValue_(todayPeak.value, definition[4]),
+      lastWeekPeak.hour === "" ? "-" : lastWeekPeak.hour + ":00",
+      formatKpiValue_(lastWeekPeak.value, definition[4]),
+      trend.indicator + " " + trend.status
+    ]);
+  });
+
+  return rows;
+}
+
+function buildHourlyHeatmapRows_(orderMatrix, itemMatrix, performanceRows) {
+  var rows = [["Hour", "LW Orders", "Today Orders", "Order Var", "LW Items", "Today Items", "Item Var", "AT", "PT", "PKT", "P95"]];
+  var performanceByHour = {};
+
+  for (var p = 1; p < performanceRows.length; p++) {
+    performanceByHour[performanceRows[p][0]] = performanceRows[p];
+  }
+
+  for (var i = 1; i < orderMatrix.length; i++) {
+    var hour = orderMatrix[i][0];
+    var perf = performanceByHour[hour] || [hour, 0, 0, 0, 0];
+    rows.push([
+      hour,
+      orderMatrix[i][1],
+      orderMatrix[i][2],
+      orderMatrix[i][3],
+      itemMatrix[i] ? itemMatrix[i][1] : 0,
+      itemMatrix[i] ? itemMatrix[i][2] : 0,
+      itemMatrix[i] ? itemMatrix[i][3] : 0,
+      perf[1],
+      perf[2],
+      perf[3],
+      perf[4]
+    ]);
+  }
+
+  return rows;
+}
+
+function buildKpiRow_(definition, dailyComparisonRows) {
+  var values = getDailyComparisonValue_(dailyComparisonRows, definition.sourceMetric);
+  return buildKpiFromValues_({
+    metric: definition.metric,
+    today: values.today,
+    lastWeek: values.lastWeek,
+    variancePercent: values.variancePercent,
+    higherIsBetter: definition.higherIsBetter,
+    valueType: definition.valueType
+  });
+}
+
+function buildKpiFromValues_(definition) {
+  var difference = definition.today - definition.lastWeek;
+  var variancePercent = definition.variancePercent !== undefined
+    ? definition.variancePercent
+    : definition.lastWeek !== 0
+      ? (difference / definition.lastWeek) * 100
+      : "";
+  var trend = getTrendIndicator_(difference, definition.higherIsBetter);
+
+  return {
+    metric: definition.metric,
+    today: definition.today,
+    lastWeek: definition.lastWeek,
+    difference: difference,
+    variancePercent: variancePercent,
+    todayText: formatKpiValue_(definition.today, definition.valueType),
+    lastWeekText: formatKpiValue_(definition.lastWeek, definition.valueType),
+    varianceText: formatVarianceText_(variancePercent),
+    indicator: trend.indicator,
+    status: trend.status,
+    color: trend.color,
+    background: trend.background
+  };
+}
+
+function getDailyComparisonValue_(dailyComparisonRows, metricName) {
+  var row = getDailyComparisonRow_(dailyComparisonRows, metricName);
+  if (!row) {
+    return {
+      today: 0,
+      lastWeek: 0,
+      difference: 0,
+      variancePercent: ""
+    };
+  }
+
+  return {
+    today: toNumber_(row[2]),
+    lastWeek: toNumber_(row[1]),
+    difference: toNumber_(row[3]),
+    variancePercent: row[4] === "" ? "" : toNumber_(row[4])
+  };
+}
+
+function getDailyComparisonRow_(dailyComparisonRows, metricName) {
+  var target = normalizeForCompare_(metricName);
+
+  for (var i = 1; i < dailyComparisonRows.length; i++) {
+    if (normalizeForCompare_(dailyComparisonRows[i][0]) === target) {
+      return dailyComparisonRows[i];
     }
   }
 
   return null;
 }
 
-function getChartTitle_(chart) {
-  try {
-    return chart.getOptions().get("title") || "";
-  } catch (error) {
-    return "";
+function getTrendIndicator_(difference, higherIsBetter) {
+  if (difference === 0) {
+    return {
+      indicator: "→",
+      status: "Stable",
+      color: "#475569",
+      background: "#f1f5f9"
+    };
   }
+
+  var improved = higherIsBetter ? difference > 0 : difference < 0;
+
+  return {
+    indicator: difference > 0 ? "▲" : "▼",
+    status: improved ? "Improved" : "Declined",
+    color: improved ? "#166534" : "#991b1b",
+    background: improved ? "#dcfce7" : "#fee2e2"
+  };
+}
+
+function isHigherBetterMetric_(metricName) {
+  var normalized = normalizeForCompare_(metricName);
+  return normalized === "orders" ||
+    normalized === "items" ||
+    normalized === "orders per hour" ||
+    normalized === "items per hour" ||
+    normalized === "average items per order";
+}
+
+function buildExecutiveBannerText_(dailySummaryRows) {
+  return dailySummaryRows.map(function(row) {
+    return row.metric + " " + row.indicator + " " + row.varianceText;
+  }).join("   |   ");
+}
+
+function getOverallPerformanceStatus_(dailySummaryRows) {
+  var improved = 0;
+  var declined = 0;
+
+  dailySummaryRows.forEach(function(row) {
+    if (row.status === "Improved") improved++;
+    if (row.status === "Declined") declined++;
+  });
+
+  if (improved > declined) {
+    return {
+      label: "Improved",
+      color: "#15803d"
+    };
+  }
+
+  if (declined > improved) {
+    return {
+      label: "Declined",
+      color: "#b91c1c"
+    };
+  }
+
+  return {
+    label: "Stable",
+    color: "#64748b"
+  };
+}
+
+function getActiveHourCount_(hourlyRows) {
+  var count = 0;
+
+  hourlyRows.forEach(function(row) {
+    if (toNumber_(row.orders) > 0 || toNumber_(row.items) > 0) {
+      count++;
+    }
+  });
+
+  return count || hourlyRows.length || 0;
+}
+
+function findHourlyExtreme_(hourlyRows, metricName, highest) {
+  var result = {
+    hour: "",
+    value: 0
+  };
+
+  hourlyRows.forEach(function(row) {
+    var value = toNumber_(row[metricName]);
+    if (value <= 0) return;
+
+    if (result.hour === "" || (highest ? value > result.value : value < result.value)) {
+      result = {
+        hour: row.hour,
+        value: value
+      };
+    }
+  });
+
+  return result;
+}
+
+function buildTopPickerSourceRows_(mtdRows) {
+  return [["Picker", "MTD Score"]].concat(
+    mtdRows.slice(0, 10).map(function(row) {
+      return [row.picker, row.score];
+    })
+  );
+}
+
+function kpiRowsToTable_(kpiRows) {
+  var output = [["Metric", "Today", "Last Week", "Difference", "Variance %", "Status"]];
+
+  kpiRows.forEach(function(row) {
+    output.push([
+      row.metric,
+      row.today,
+      row.lastWeek,
+      row.difference,
+      row.variancePercent,
+      row.indicator + " " + row.status
+    ]);
+  });
+
+  return output;
+}
+
+function getTableColumnMax_(rows, columnIndex) {
+  var maxValue = 0;
+
+  for (var i = 1; i < rows.length; i++) {
+    maxValue = Math.max(maxValue, toNumber_(rows[i][columnIndex]));
+  }
+
+  return maxValue;
+}
+
+function formatKpiValue_(value, valueType) {
+  if (valueType === "integer") return formatNumber_(Math.round(toNumber_(value)), 0);
+  if (valueType === "percent") return formatNumber_(round2_(toNumber_(value)), 2) + "%";
+  return formatNumber_(round2_(toNumber_(value)), 2);
+}
+
+function formatVarianceText_(variancePercent) {
+  if (variancePercent === "" || variancePercent === null || variancePercent === undefined) return "n/a";
+
+  var value = round2_(toNumber_(variancePercent));
+  return (value > 0 ? "+" : "") + formatNumber_(value, 2) + "%";
+}
+
+function formatNumber_(value, decimals) {
+  var fixed = decimals > 0 ? Number(value).toFixed(decimals) : String(Math.round(Number(value)));
+  var parts = fixed.split(".");
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return parts.join(".");
 }
 
 function buildComplaintIndex_(rcaSheet) {
