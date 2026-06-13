@@ -1105,9 +1105,9 @@ function insertDashboardCharts_(dashboardSheet, dataSheet, orderMatrix, itemMatr
       {
         hAxisTitle: "Hour",
         vAxisTitle: "Orders",
-        colors: [DASHBOARD_THEME.INFO, DASHBOARD_THEME.WHITE],
+        colors: ["#60A5FA", "#FFFFFF"],
         width: 820,
-        height: 430
+        height: 450
       }
     );
   }
@@ -1122,9 +1122,9 @@ function insertDashboardCharts_(dashboardSheet, dataSheet, orderMatrix, itemMatr
       {
         hAxisTitle: "Hour",
         vAxisTitle: "Items",
-        colors: [DASHBOARD_THEME.INFO, DASHBOARD_THEME.WHITE],
+        colors: ["#60A5FA", "#FFFFFF"],
         width: 820,
-        height: 430
+        height: 450
       }
     );
   }
@@ -1139,7 +1139,7 @@ function insertDashboardCharts_(dashboardSheet, dataSheet, orderMatrix, itemMatr
       {
         hAxisTitle: "Hour",
         vAxisTitle: "Minutes",
-        colors: [DASHBOARD_THEME.WARNING, DASHBOARD_THEME.SUCCESS, DASHBOARD_THEME.CYAN, DASHBOARD_THEME.CRITICAL],
+        colors: ["#FBBF24", "#4ADE80", "#A78BFA", "#F87171"],
         width: 820,
         height: 440
       }
@@ -1154,16 +1154,16 @@ function insertDarkStoreLineChart_(sheet, title, range, row, column, options) {
     .setChartType(Charts.ChartType.LINE)
     .addRange(range)
     .setOption("title", title)
-    .setOption("legend", { position: "top", textStyle: { color: DASHBOARD_THEME.SECONDARY_TEXT, fontSize: 12 } })
-    .setOption("hAxis", { title: options.hAxisTitle, textStyle: { color: DASHBOARD_THEME.MUTED_TEXT, fontSize: 11 }, titleTextStyle: { color: DASHBOARD_THEME.SECONDARY_TEXT, fontSize: 12, bold: true }, gridlines: { color: "#22304A" } })
-    .setOption("vAxis", { title: options.vAxisTitle, textStyle: { color: DASHBOARD_THEME.MUTED_TEXT, fontSize: 11 }, titleTextStyle: { color: DASHBOARD_THEME.SECONDARY_TEXT, fontSize: 12, bold: true }, gridlines: { color: "#22304A" } })
+    .setOption("legend", { position: "top", textStyle: { color: "#FFFFFF", fontSize: 12 } })
+    .setOption("hAxis", { title: options.hAxisTitle, textStyle: { color: "#E2E8F0", fontSize: 11 }, titleTextStyle: { color: "#E2E8F0", fontSize: 12, bold: true }, baselineColor: "#64748B", gridlines: { color: "#475569" }, minorGridlines: { color: "#344055" } })
+    .setOption("vAxis", { title: options.vAxisTitle, textStyle: { color: "#E2E8F0", fontSize: 11 }, titleTextStyle: { color: "#E2E8F0", fontSize: 12, bold: true }, baselineColor: "#64748B", gridlines: { color: "#475569" }, minorGridlines: { color: "#344055" } })
     .setOption("colors", options.colors || [DASHBOARD_THEME.BLUE, DASHBOARD_THEME.GREEN])
     .setOption("curveType", "function")
     .setOption("backgroundColor", DASHBOARD_THEME.CARD)
-    .setOption("chartArea", { left: 80, top: 70, width: "76%", height: "62%" })
-    .setOption("titleTextStyle", { color: DASHBOARD_THEME.PRIMARY_TEXT, fontSize: 17, bold: true })
-    .setOption("lineWidth", 4)
-    .setOption("pointSize", 6)
+    .setOption("chartArea", { left: 80, top: 70, width: "76%", height: "62%", backgroundColor: DASHBOARD_THEME.CARD })
+    .setOption("titleTextStyle", { color: "#FFFFFF", fontSize: 14, bold: true })
+    .setOption("lineWidth", 5)
+    .setOption("pointSize", 8)
     .setOption("width", options.width || 620)
     .setOption("height", options.height || 320)
     .setPosition(row, column, 0, 0)
@@ -1662,25 +1662,26 @@ function heatmapFiveColor_(value, minValue, maxValue, higherIsBetter) {
   var ratio = Math.max(0, Math.min(1, (value - minValue) / (maxValue - minValue)));
   var score = higherIsBetter ? ratio : 1 - ratio;
 
-  if (score >= 0.8) return "#14532D";
-  if (score >= 0.6) return "#166534";
-  if (score >= 0.4) return "#D4A017";
-  if (score >= 0.2) return "#B45309";
-  return "#991B1B";
+  if (score >= 0.8) return "#22C55E";
+  if (score >= 0.6) return "#84CC16";
+  if (score >= 0.4) return "#EAB308";
+  if (score >= 0.2) return "#F97316";
+  return "#DC2626";
 }
 
 function varianceHeatmapColor_(value) {
-  if (value > 0) return "#14532D";
-  if (value < 0) return "#991B1B";
+  if (value > 0) return "#22C55E";
+  if (value < 0) return "#DC2626";
   return DASHBOARD_THEME.LIGHT;
 }
 
 function slaHeatmapColor_(value, target) {
   if (value <= 0) return DASHBOARD_THEME.LIGHT;
-  if (value <= target) return "#166534";
-  if (value <= target * 1.1) return "#D4A017";
-  if (value <= target * 1.25) return "#B45309";
-  return "#991B1B";
+  if (value <= target) return "#22C55E";
+  if (value <= target * 1.1) return "#84CC16";
+  if (value <= target * 1.25) return "#EAB308";
+  if (value <= target * 1.5) return "#F97316";
+  return "#DC2626";
 }
 
 function formatKpiValue_(value, valueType) {
