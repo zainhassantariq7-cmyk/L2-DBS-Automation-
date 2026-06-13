@@ -600,7 +600,9 @@ function resetDashboardSheet_(sheet) {
   ensureSheetSize_(sheet, GRAPH_LAYOUT.DASHBOARD_MIN_ROWS, GRAPH_LAYOUT.DASHBOARD_MIN_COLUMNS);
   sheet.setFrozenRows(6);
   sheet.setHiddenGridlines(true);
-  sheet.setTabColor("#0b1f3a");
+  sheet.setTabColor("#111827");
+  sheet.setColumnWidths(1, GRAPH_LAYOUT.DASHBOARD_MIN_COLUMNS, 118);
+  sheet.setRowHeights(1, GRAPH_LAYOUT.DASHBOARD_MIN_ROWS, 32);
 }
 
 function prepareGraphsSheet_(sheet) {
@@ -887,20 +889,22 @@ function renderGraphsHeader_(sheet, latestDate, comparisonDate, dailySummaryRows
   sheet.getRange("A1:N1")
     .merge()
     .setValue("RUHDS48 | DARK STORE EXECUTIVE PERFORMANCE DASHBOARD")
-    .setBackground("#0b1f3a")
+    .setBackground("#111827")
     .setFontColor("#ffffff")
     .setFontWeight("bold")
-    .setFontSize(18)
+    .setFontSize(22)
+    .setFontFamily("Arial")
     .setHorizontalAlignment("center")
     .setVerticalAlignment("middle");
 
   sheet.getRange("A2:N2")
     .merge()
     .setValue(buildExecutiveBannerText_(dailySummaryRows))
-    .setBackground("#12355b")
+    .setBackground("#1e293b")
     .setFontColor("#ffffff")
     .setFontWeight("bold")
-    .setFontSize(11)
+    .setFontSize(13)
+    .setFontFamily("Arial")
     .setHorizontalAlignment("center")
     .setVerticalAlignment("middle");
 
@@ -910,11 +914,14 @@ function renderGraphsHeader_(sheet, latestDate, comparisonDate, dailySummaryRows
     .setBackground(overall.color)
     .setFontColor("#ffffff")
     .setFontWeight("bold")
-    .setFontSize(12)
+    .setFontSize(14)
+    .setFontFamily("Arial")
     .setHorizontalAlignment("center")
     .setVerticalAlignment("middle");
 
-  sheet.setRowHeights(1, 3, 30);
+  sheet.setRowHeights(1, 1, 42);
+  sheet.setRowHeights(2, 1, 38);
+  sheet.setRowHeights(3, 1, 36);
 }
 
 function renderHeaderMetrics_(sheet, latestDate, comparisonDate, dailyComparisonRows) {
@@ -935,22 +942,26 @@ function renderHeaderMetrics_(sheet, latestDate, comparisonDate, dailyComparison
     sheet.getRange(4, column, 1, 2)
       .merge()
       .setValue(metric[0])
-      .setBackground("#d9eaf7")
-      .setFontColor("#0b1f3a")
+      .setBackground("#dbeafe")
+      .setFontColor("#172554")
       .setFontWeight("bold")
-      .setFontSize(9)
+      .setFontSize(10)
+      .setFontFamily("Arial")
       .setHorizontalAlignment("center");
     sheet.getRange(5, column, 1, 2)
       .merge()
       .setValue(metric[1])
       .setBackground("#f8fafc")
-      .setFontColor("#0f172a")
+      .setFontColor("#111827")
       .setFontWeight("bold")
-      .setFontSize(10)
+      .setFontSize(12)
+      .setFontFamily("Arial")
       .setHorizontalAlignment("center");
   });
 
-  sheet.getRange("A4:N5").setBorder(true, true, true, true, true, true, "#94a3b8", SpreadsheetApp.BorderStyle.SOLID);
+  sheet.getRange("A4:N5").setBorder(true, true, true, true, true, true, "#93c5fd", SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+  sheet.setRowHeights(4, 1, 30);
+  sheet.setRowHeights(5, 1, 36);
 }
 
 function renderDailyPerformanceSummary_(sheet, dailySummaryRows) {
@@ -964,14 +975,14 @@ function renderProductivityKpiCards_(sheet, productivityRows) {
 }
 
 function renderDashboardChartsArea_(sheet) {
-  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.ORDERS_CHART_ROW - 2, 1, 7, "HOURLY ORDERS TREND | TODAY VS SAME DAY LAST WEEK", "#1d4ed8");
-  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.ITEMS_CHART_ROW - 2, 8, 7, "HOURLY ITEMS TREND | TODAY VS SAME DAY LAST WEEK", "#15803d");
-  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.SPEED_CHART_ROW - 2, 1, 7, "HOURLY SPEED TREND | AT / PT / PKT / P95", "#7e22ce");
-  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.VARIANCE_ROW - 2, 8, 7, "VARIANCE ANALYSIS TABLE", "#0f172a");
-  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.SLA_ROW - 2, 1, 6, "SLA MONITOR", "#b45309");
-  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.PEAK_HOUR_ROW - 2, 8, 7, "PEAK HOUR ANALYSIS", "#0369a1");
-  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.PICKER_ROW - 1, 1, 14, "TOP PICKER MTD RANKING", "#14532d");
-  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.HEATMAP_ROW - 1, 1, 14, "HOURLY HEATMAP | PEAK AND WEAK PERFORMANCE HOURS", "#991b1b");
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.ORDERS_CHART_ROW - 2, 1, 7, "HOURLY ORDERS TREND | TODAY VS SAME DAY LAST WEEK", "#2563eb");
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.ITEMS_CHART_ROW - 2, 8, 7, "HOURLY ITEMS TREND | TODAY VS SAME DAY LAST WEEK", "#059669");
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.SPEED_CHART_ROW - 2, 1, 7, "HOURLY SPEED TREND | AT / PT / PKT / P95", "#7c3aed");
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.VARIANCE_ROW - 2, 8, 7, "VARIANCE ANALYSIS TABLE", "#334155");
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.SLA_ROW - 2, 1, 6, "SLA MONITOR", "#d97706");
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.PEAK_HOUR_ROW - 2, 8, 7, "PEAK HOUR ANALYSIS", "#0284c7");
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.PICKER_ROW - 1, 1, 14, "TOP PICKER MTD RANKING", "#047857");
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.HEATMAP_ROW - 1, 1, 14, "HOURLY HEATMAP | PEAK AND WEAK PERFORMANCE HOURS", "#be123c");
 }
 
 function renderDashboardSectionTitle_(sheet, row, column, numColumns, title, color) {
@@ -981,10 +992,11 @@ function renderDashboardSectionTitle_(sheet, row, column, numColumns, title, col
     .setBackground(color)
     .setFontColor("#ffffff")
     .setFontWeight("bold")
-    .setFontSize(11)
+    .setFontSize(13)
+    .setFontFamily("Arial")
     .setHorizontalAlignment("center")
     .setVerticalAlignment("middle");
-  sheet.setRowHeight(row, 26);
+  sheet.setRowHeight(row, 34);
 }
 
 function renderKpiCards_(sheet, startRow, kpiRows, cardWidth) {
@@ -1004,27 +1016,30 @@ function renderKpiCards_(sheet, startRow, kpiRows, cardWidth) {
     statusRange.merge().setValue("Status: " + kpi.indicator + " " + kpi.status);
 
     cardRange
-      .setBackground("#ffffff")
-      .setFontColor("#0f172a")
+      .setBackground("#f8fafc")
+      .setFontColor("#111827")
+      .setFontFamily("Arial")
       .setHorizontalAlignment("center")
       .setVerticalAlignment("middle")
       .setWrap(true)
-      .setBorder(true, true, true, true, true, true, "#cbd5e1", SpreadsheetApp.BorderStyle.SOLID);
+      .setBorder(true, true, true, true, true, true, "#94a3b8", SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
 
     titleRange
-      .setBackground("#e2e8f0")
+      .setBackground("#1e293b")
+      .setFontColor("#ffffff")
       .setFontWeight("bold")
-      .setFontSize(10);
-    todayRange.setFontWeight("bold").setFontSize(10);
-    lastWeekRange.setFontSize(9);
-    varianceRange.setFontWeight("bold").setFontColor(kpi.color);
+      .setFontSize(11);
+    todayRange.setFontWeight("bold").setFontSize(13);
+    lastWeekRange.setFontSize(11).setFontColor("#475569");
+    varianceRange.setFontWeight("bold").setFontSize(12).setFontColor(kpi.color);
     statusRange
       .setBackground(kpi.background)
       .setFontColor(kpi.color)
-      .setFontWeight("bold");
+      .setFontWeight("bold")
+      .setFontSize(12);
   });
 
-  sheet.setRowHeights(startRow, 5, 24);
+  sheet.setRowHeights(startRow, 5, 30);
 }
 
 function renderGraphSourceTables_(sheet, orderMatrix, itemMatrix, performanceRows, dailyComparisonRows, mtdRows, productivityRows, peakHourRows, heatmapRows) {
@@ -1062,9 +1077,9 @@ function insertDashboardCharts_(dashboardSheet, dataSheet, orderMatrix, itemMatr
       {
         hAxisTitle: "Hour",
         vAxisTitle: "Orders",
-        colors: ["#64748b", "#2563eb"],
-        width: 640,
-        height: 330
+        colors: ["#94a3b8", "#2563eb"],
+        width: 720,
+        height: 380
       }
     );
   }
@@ -1079,9 +1094,9 @@ function insertDashboardCharts_(dashboardSheet, dataSheet, orderMatrix, itemMatr
       {
         hAxisTitle: "Hour",
         vAxisTitle: "Items",
-        colors: ["#64748b", "#16a34a"],
-        width: 640,
-        height: 330
+        colors: ["#94a3b8", "#059669"],
+        width: 720,
+        height: 380
       }
     );
   }
@@ -1096,9 +1111,9 @@ function insertDashboardCharts_(dashboardSheet, dataSheet, orderMatrix, itemMatr
       {
         hAxisTitle: "Hour",
         vAxisTitle: "Minutes",
-        colors: ["#2563eb", "#ca8a04", "#ea580c", "#dc2626"],
-        width: 640,
-        height: 340
+        colors: ["#2563eb", "#d97706", "#f97316", "#dc2626"],
+        width: 720,
+        height: 390
       }
     );
   }
@@ -1115,8 +1130,13 @@ function insertDarkStoreLineChart_(sheet, title, range, row, column, options) {
     .setOption("hAxis", { title: options.hAxisTitle })
     .setOption("vAxis", { title: options.vAxisTitle })
     .setOption("colors", options.colors || ["#2563eb", "#16a34a"])
-    .setOption("lineWidth", 3)
-    .setOption("pointSize", 4)
+    .setOption("curveType", "function")
+    .setOption("backgroundColor", "#ffffff")
+    .setOption("chartArea", { left: 70, top: 50, width: "78%", height: "64%" })
+    .setOption("titleTextStyle", { color: "#111827", fontSize: 16, bold: true })
+    .setOption("legendTextStyle", { color: "#334155", fontSize: 12 })
+    .setOption("lineWidth", 4)
+    .setOption("pointSize", 5)
     .setOption("width", options.width || 620)
     .setOption("height", options.height || 320)
     .setPosition(row, column, 0, 0)
@@ -1177,8 +1197,9 @@ function renderSlaMonitor_(sheet, dailyComparisonRows) {
     var statusRange = sheet.getRange(startRow + i, 4);
     var metTarget = rows[i][3].indexOf("GREEN") === 0;
     statusRange
-      .setBackground(metTarget ? "#dcfce7" : "#fee2e2")
-      .setFontColor(metTarget ? "#166534" : "#991b1b")
+      .setValue(metTarget ? "● TARGET MET" : "● TARGET MISSED")
+      .setBackground(metTarget ? "#bbf7d0" : "#fecaca")
+      .setFontColor(metTarget ? "#14532d" : "#7f1d1d")
       .setFontWeight("bold");
   }
 }
@@ -1236,36 +1257,40 @@ function renderHourlyHeatmap_(sheet, heatmapRows) {
     var rowBackgrounds = [];
     for (var c = 0; c < numColumns; c++) rowBackgrounds.push("#ffffff");
 
-    rowBackgrounds[2] = greenScaleColor_(toNumber_(heatmapRows[r][2]), 0, maxOrders);
-    rowBackgrounds[5] = greenScaleColor_(toNumber_(heatmapRows[r][5]), 0, maxItems);
-    rowBackgrounds[3] = heatmapRows[r][3] > 0 ? "#dcfce7" : heatmapRows[r][3] < 0 ? "#fee2e2" : "#f8fafc";
-    rowBackgrounds[6] = heatmapRows[r][6] > 0 ? "#dcfce7" : heatmapRows[r][6] < 0 ? "#fee2e2" : "#f8fafc";
-    rowBackgrounds[7] = thresholdColor_(toNumber_(heatmapRows[r][7]), 5, true);
-    rowBackgrounds[8] = thresholdColor_(toNumber_(heatmapRows[r][8]), 11, true);
-    rowBackgrounds[9] = thresholdColor_(toNumber_(heatmapRows[r][9]), 5, true);
-    rowBackgrounds[10] = thresholdColor_(toNumber_(heatmapRows[r][10]), 2, true);
+    rowBackgrounds[2] = heatmapScaleColor_(toNumber_(heatmapRows[r][2]), 0, maxOrders, "#eff6ff", "#1d4ed8");
+    rowBackgrounds[5] = heatmapScaleColor_(toNumber_(heatmapRows[r][5]), 0, maxItems, "#ecfdf5", "#047857");
+    rowBackgrounds[3] = varianceHeatmapColor_(toNumber_(heatmapRows[r][3]));
+    rowBackgrounds[6] = varianceHeatmapColor_(toNumber_(heatmapRows[r][6]));
+    rowBackgrounds[7] = slaHeatmapColor_(toNumber_(heatmapRows[r][7]), 5);
+    rowBackgrounds[8] = slaHeatmapColor_(toNumber_(heatmapRows[r][8]), 11);
+    rowBackgrounds[9] = slaHeatmapColor_(toNumber_(heatmapRows[r][9]), 5);
+    rowBackgrounds[10] = slaHeatmapColor_(toNumber_(heatmapRows[r][10]), 2);
     backgrounds.push(rowBackgrounds);
   }
 
   if (backgrounds.length > 0) {
     sheet.getRange(startRow + 1, 1, backgrounds.length, numColumns).setBackgrounds(backgrounds);
   }
+
+  sheet.setRowHeights(startRow, numRows, 30);
 }
 
 function formatDashboardTable_(sheet, row, column, numRows, numColumns, headerColor) {
   var range = sheet.getRange(row, column, numRows, numColumns);
   range
     .setFontFamily("Arial")
-    .setFontSize(9)
+    .setFontSize(11)
     .setHorizontalAlignment("center")
     .setVerticalAlignment("middle")
     .setWrap(true)
-    .setBorder(true, true, true, true, true, true, "#cbd5e1", SpreadsheetApp.BorderStyle.SOLID);
+    .setBorder(true, true, true, true, true, true, "#cbd5e1", SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
 
   sheet.getRange(row, column, 1, numColumns)
     .setBackground(headerColor)
     .setFontColor("#ffffff")
-    .setFontWeight("bold");
+    .setFontWeight("bold")
+    .setFontSize(12);
+  sheet.setRowHeights(row, numRows, 30);
 }
 
 function buildDailyPerformanceSummaryRows_(dailyComparisonRows) {
@@ -1577,6 +1602,42 @@ function getTableColumnMax_(rows, columnIndex) {
   }
 
   return maxValue;
+}
+
+function heatmapScaleColor_(value, minValue, maxValue, startHex, endHex) {
+  if (maxValue <= minValue) {
+    return value > 0 ? endHex : startHex;
+  }
+
+  var ratio = Math.max(0, Math.min(1, (value - minValue) / (maxValue - minValue)));
+  var start = hexToRgb_(startHex);
+  var end = hexToRgb_(endHex);
+
+  return rgbToHex_({
+    r: Math.round(start.r + ((end.r - start.r) * ratio)),
+    g: Math.round(start.g + ((end.g - start.g) * ratio)),
+    b: Math.round(start.b + ((end.b - start.b) * ratio))
+  });
+}
+
+function varianceHeatmapColor_(value) {
+  if (value > 0) return "#bbf7d0";
+  if (value < 0) return "#fecaca";
+  return "#f8fafc";
+}
+
+function slaHeatmapColor_(value, target) {
+  if (value <= 0) return "#f8fafc";
+  return value <= target ? "#bbf7d0" : "#fecaca";
+}
+
+function hexToRgb_(hex) {
+  var normalized = String(hex || "#000000").replace("#", "");
+  return {
+    r: parseInt(normalized.substring(0, 2), 16),
+    g: parseInt(normalized.substring(2, 4), 16),
+    b: parseInt(normalized.substring(4, 6), 16)
+  };
 }
 
 function formatKpiValue_(value, valueType) {
