@@ -70,15 +70,25 @@ var GRAPH_LAYOUT = {
 };
 
 const DASHBOARD_THEME = {
-  NAVY: "#0F172A",
-  BLUE: "#2563EB",
-  CYAN: "#06B6D4",
-  GREEN: "#10B981",
-  RED: "#EF4444",
-  ORANGE: "#F59E0B",
-  PURPLE: "#8B5CF6",
-  LIGHT: "#F8FAFC",
-  BORDER: "#CBD5E1",
+  BACKGROUND: "#0B1320",
+  CARD: "#172033",
+  SECTION: "#22304A",
+  BORDER: "#344055",
+  PRIMARY_TEXT: "#FFFFFF",
+  SECONDARY_TEXT: "#CBD5E1",
+  MUTED_TEXT: "#94A3B8",
+  SUCCESS: "#4ADE80",
+  WARNING: "#D4A017",
+  CRITICAL: "#DC2626",
+  INFO: "#7C9BCF",
+  NAVY: "#111827",
+  BLUE: "#7C9BCF",
+  CYAN: "#93C5FD",
+  GREEN: "#4ADE80",
+  RED: "#DC2626",
+  ORANGE: "#D4A017",
+  PURPLE: "#D4A017",
+  LIGHT: "#172033",
   WHITE: "#FFFFFF"
 };
 
@@ -613,9 +623,13 @@ function resetDashboardSheet_(sheet) {
   ensureSheetSize_(sheet, GRAPH_LAYOUT.DASHBOARD_MIN_ROWS, GRAPH_LAYOUT.DASHBOARD_MIN_COLUMNS);
   sheet.setFrozenRows(6);
   sheet.setHiddenGridlines(true);
-  sheet.setTabColor(DASHBOARD_THEME.NAVY);
+  sheet.setTabColor(DASHBOARD_THEME.BACKGROUND);
   sheet.setColumnWidths(1, GRAPH_LAYOUT.DASHBOARD_MIN_COLUMNS, 126);
   sheet.setRowHeights(1, GRAPH_LAYOUT.DASHBOARD_MIN_ROWS, 34);
+  sheet.getRange(1, 1, GRAPH_LAYOUT.DASHBOARD_MIN_ROWS, GRAPH_LAYOUT.DASHBOARD_MIN_COLUMNS)
+    .setBackground(DASHBOARD_THEME.BACKGROUND)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontFamily("Arial");
 }
 
 function prepareGraphsSheet_(sheet) {
@@ -903,7 +917,7 @@ function renderGraphsHeader_(sheet, latestDate, comparisonDate, dailySummaryRows
     .merge()
     .setValue("RUHDS48 OPERATIONS PERFORMANCE DASHBOARD")
     .setBackground(DASHBOARD_THEME.NAVY)
-    .setFontColor(DASHBOARD_THEME.WHITE)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
     .setFontWeight("bold")
     .setFontSize(24)
     .setFontFamily("Arial")
@@ -913,8 +927,8 @@ function renderGraphsHeader_(sheet, latestDate, comparisonDate, dailySummaryRows
   sheet.getRange("A2:N2")
     .merge()
     .setValue("Latest Available Date vs Same Day Last Week  |  " + buildExecutiveBannerText_(dailySummaryRows))
-    .setBackground("#1E293B")
-    .setFontColor(DASHBOARD_THEME.WHITE)
+    .setBackground(DASHBOARD_THEME.NAVY)
+    .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
     .setFontWeight("bold")
     .setFontSize(14)
     .setFontFamily("Arial")
@@ -925,7 +939,7 @@ function renderGraphsHeader_(sheet, latestDate, comparisonDate, dailySummaryRows
     .merge()
     .setValue("Overall Status: " + overall.label + "     Last Refresh Time: " + refreshedAt + "     Latest Date: " + (latestDate || "-") + "     Comparison Date: " + (comparisonDate || "-"))
     .setBackground(overall.color)
-    .setFontColor(DASHBOARD_THEME.WHITE)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
     .setFontWeight("bold")
     .setFontSize(14)
     .setFontFamily("Arial")
@@ -955,8 +969,8 @@ function renderHeaderMetrics_(sheet, latestDate, comparisonDate, dailyComparison
     sheet.getRange(4, column, 1, 2)
       .merge()
       .setValue(metric[0])
-      .setBackground("#DBEAFE")
-      .setFontColor(DASHBOARD_THEME.NAVY)
+      .setBackground(DASHBOARD_THEME.SECTION)
+      .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
       .setFontWeight("bold")
       .setFontSize(10)
       .setFontFamily("Arial")
@@ -964,8 +978,8 @@ function renderHeaderMetrics_(sheet, latestDate, comparisonDate, dailyComparison
     sheet.getRange(5, column, 1, 2)
       .merge()
       .setValue(metric[1])
-      .setBackground(DASHBOARD_THEME.WHITE)
-      .setFontColor(DASHBOARD_THEME.NAVY)
+      .setBackground(DASHBOARD_THEME.CARD)
+      .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
       .setFontWeight("bold")
       .setFontSize(12)
       .setFontFamily("Arial")
@@ -990,8 +1004,8 @@ function renderProductivityKpiCards_(sheet, productivityRows) {
 function renderDashboardChartsArea_(sheet) {
   renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.ORDERS_CHART_ROW - 2, 1, 7, "HOURLY ORDERS TREND | TODAY VS SAME DAY LAST WEEK", DASHBOARD_THEME.BLUE);
   renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.ITEMS_CHART_ROW - 2, 8, 7, "HOURLY ITEMS TREND | TODAY VS SAME DAY LAST WEEK", DASHBOARD_THEME.GREEN);
-  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.SPEED_CHART_ROW - 2, 1, 7, "HOURLY SPEED TREND | AT / PT / PKT / P95", DASHBOARD_THEME.PURPLE);
-  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.VARIANCE_ROW - 2, 8, 7, "VARIANCE ANALYSIS TABLE", "#334155");
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.SPEED_CHART_ROW - 2, 1, 7, "HOURLY SPEED TREND | AT / PT / PKT / P95", DASHBOARD_THEME.WARNING);
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.VARIANCE_ROW - 2, 8, 7, "VARIANCE ANALYSIS TABLE", DASHBOARD_THEME.SECTION);
   renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.SLA_ROW - 2, 1, 6, "SLA MONITOR", DASHBOARD_THEME.ORANGE);
   renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.PEAK_HOUR_ROW - 2, 8, 7, "PEAK HOUR ANALYSIS", DASHBOARD_THEME.CYAN);
   renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.PICKER_ROW - 1, 1, 14, "TOP PICKER MTD RANKING", DASHBOARD_THEME.GREEN);
@@ -1003,7 +1017,7 @@ function renderDashboardSectionTitle_(sheet, row, column, numColumns, title, col
     .merge()
     .setValue(title)
     .setBackground(color)
-    .setFontColor(DASHBOARD_THEME.WHITE)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
     .setFontWeight("bold")
     .setFontSize(15)
     .setFontFamily("Arial")
@@ -1030,8 +1044,8 @@ function renderKpiCards_(sheet, startRow, kpiRows, cardWidth) {
     statusRange.merge().setValue("Status: " + kpi.indicator + " " + kpi.status);
 
     cardRange
-      .setBackground(DASHBOARD_THEME.WHITE)
-      .setFontColor(DASHBOARD_THEME.NAVY)
+      .setBackground(DASHBOARD_THEME.CARD)
+      .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
       .setFontFamily("Arial")
       .setHorizontalAlignment("center")
       .setVerticalAlignment("middle")
@@ -1039,12 +1053,12 @@ function renderKpiCards_(sheet, startRow, kpiRows, cardWidth) {
       .setBorder(true, true, true, true, true, true, cardColor, SpreadsheetApp.BorderStyle.SOLID_THICK);
 
     titleRange
-      .setBackground(cardColor)
-      .setFontColor(DASHBOARD_THEME.WHITE)
+      .setBackground(DASHBOARD_THEME.SECTION)
+      .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
       .setFontWeight("bold")
       .setFontSize(12);
-    todayRange.setFontWeight("bold").setFontSize(14).setFontColor(DASHBOARD_THEME.NAVY);
-    lastWeekRange.setFontSize(12).setFontColor("#475569");
+    todayRange.setFontWeight("bold").setFontSize(14).setFontColor(DASHBOARD_THEME.PRIMARY_TEXT);
+    lastWeekRange.setFontSize(12).setFontColor(DASHBOARD_THEME.SECONDARY_TEXT);
     varianceRange.setFontWeight("bold").setFontSize(13).setFontColor(kpi.color);
     statusRange
       .setBackground(kpi.background)
@@ -1091,7 +1105,7 @@ function insertDashboardCharts_(dashboardSheet, dataSheet, orderMatrix, itemMatr
       {
         hAxisTitle: "Hour",
         vAxisTitle: "Orders",
-        colors: ["#94A3B8", DASHBOARD_THEME.BLUE],
+        colors: [DASHBOARD_THEME.INFO, DASHBOARD_THEME.WHITE],
         width: 820,
         height: 430
       }
@@ -1108,7 +1122,7 @@ function insertDashboardCharts_(dashboardSheet, dataSheet, orderMatrix, itemMatr
       {
         hAxisTitle: "Hour",
         vAxisTitle: "Items",
-        colors: ["#94A3B8", DASHBOARD_THEME.GREEN],
+        colors: [DASHBOARD_THEME.INFO, DASHBOARD_THEME.WHITE],
         width: 820,
         height: 430
       }
@@ -1125,7 +1139,7 @@ function insertDashboardCharts_(dashboardSheet, dataSheet, orderMatrix, itemMatr
       {
         hAxisTitle: "Hour",
         vAxisTitle: "Minutes",
-        colors: [DASHBOARD_THEME.PURPLE, DASHBOARD_THEME.ORANGE, DASHBOARD_THEME.CYAN, DASHBOARD_THEME.RED],
+        colors: [DASHBOARD_THEME.WARNING, DASHBOARD_THEME.SUCCESS, DASHBOARD_THEME.CYAN, DASHBOARD_THEME.CRITICAL],
         width: 820,
         height: 440
       }
@@ -1140,14 +1154,14 @@ function insertDarkStoreLineChart_(sheet, title, range, row, column, options) {
     .setChartType(Charts.ChartType.LINE)
     .addRange(range)
     .setOption("title", title)
-    .setOption("legend", { position: "top", textStyle: { color: "#334155", fontSize: 12 } })
-    .setOption("hAxis", { title: options.hAxisTitle, textStyle: { color: "#475569", fontSize: 11 }, titleTextStyle: { color: DASHBOARD_THEME.NAVY, fontSize: 12, bold: true } })
-    .setOption("vAxis", { title: options.vAxisTitle, textStyle: { color: "#475569", fontSize: 11 }, titleTextStyle: { color: DASHBOARD_THEME.NAVY, fontSize: 12, bold: true } })
+    .setOption("legend", { position: "top", textStyle: { color: DASHBOARD_THEME.SECONDARY_TEXT, fontSize: 12 } })
+    .setOption("hAxis", { title: options.hAxisTitle, textStyle: { color: DASHBOARD_THEME.MUTED_TEXT, fontSize: 11 }, titleTextStyle: { color: DASHBOARD_THEME.SECONDARY_TEXT, fontSize: 12, bold: true }, gridlines: { color: "#22304A" } })
+    .setOption("vAxis", { title: options.vAxisTitle, textStyle: { color: DASHBOARD_THEME.MUTED_TEXT, fontSize: 11 }, titleTextStyle: { color: DASHBOARD_THEME.SECONDARY_TEXT, fontSize: 12, bold: true }, gridlines: { color: "#22304A" } })
     .setOption("colors", options.colors || [DASHBOARD_THEME.BLUE, DASHBOARD_THEME.GREEN])
     .setOption("curveType", "function")
-    .setOption("backgroundColor", DASHBOARD_THEME.WHITE)
+    .setOption("backgroundColor", DASHBOARD_THEME.CARD)
     .setOption("chartArea", { left: 80, top: 70, width: "76%", height: "62%" })
-    .setOption("titleTextStyle", { color: DASHBOARD_THEME.NAVY, fontSize: 17, bold: true })
+    .setOption("titleTextStyle", { color: DASHBOARD_THEME.PRIMARY_TEXT, fontSize: 17, bold: true })
     .setOption("lineWidth", 4)
     .setOption("pointSize", 6)
     .setOption("width", options.width || 620)
@@ -1211,8 +1225,8 @@ function renderSlaMonitor_(sheet, dailyComparisonRows) {
     var metTarget = rows[i][3].indexOf("GREEN") === 0;
     statusRange
       .setValue(metTarget ? "● TARGET MET" : "● TARGET MISSED")
-      .setBackground(metTarget ? "#DCFCE7" : "#FEE2E2")
-      .setFontColor(metTarget ? DASHBOARD_THEME.GREEN : DASHBOARD_THEME.RED)
+      .setBackground(metTarget ? "#14532D" : "#7F1D1D")
+      .setFontColor(metTarget ? DASHBOARD_THEME.SUCCESS : "#FCA5A5")
       .setFontWeight("bold");
   }
 }
@@ -1224,8 +1238,8 @@ function renderPeakHourAnalysis_(sheet, peakHourRows) {
 
   for (var i = 1; i < peakHourRows.length; i++) {
     var status = normalizeText_(peakHourRows[i][5]);
-    var color = status.indexOf("Improved") >= 0 ? DASHBOARD_THEME.GREEN : status.indexOf("Declined") >= 0 ? DASHBOARD_THEME.RED : "#475569";
-    var background = status.indexOf("Improved") >= 0 ? "#DCFCE7" : status.indexOf("Declined") >= 0 ? "#FEE2E2" : "#E2E8F0";
+    var color = status.indexOf("Improved") >= 0 ? DASHBOARD_THEME.SUCCESS : status.indexOf("Declined") >= 0 ? "#FCA5A5" : DASHBOARD_THEME.SECONDARY_TEXT;
+    var background = status.indexOf("Improved") >= 0 ? "#14532D" : status.indexOf("Declined") >= 0 ? "#7F1D1D" : DASHBOARD_THEME.SECTION;
     sheet.getRange(startRow + i, 13)
       .setBackground(background)
       .setFontColor(color)
@@ -1268,7 +1282,7 @@ function renderHourlyHeatmap_(sheet, heatmapRows) {
 
   for (var r = 1; r < heatmapRows.length; r++) {
     var rowBackgrounds = [];
-    for (var c = 0; c < numColumns; c++) rowBackgrounds.push(DASHBOARD_THEME.WHITE);
+    for (var c = 0; c < numColumns; c++) rowBackgrounds.push(DASHBOARD_THEME.CARD);
 
     rowBackgrounds[2] = heatmapFiveColor_(toNumber_(heatmapRows[r][2]), 0, maxOrders, true);
     rowBackgrounds[5] = heatmapFiveColor_(toNumber_(heatmapRows[r][5]), 0, maxItems, true);
@@ -1290,7 +1304,19 @@ function renderHourlyHeatmap_(sheet, heatmapRows) {
 
 function formatDashboardTable_(sheet, row, column, numRows, numColumns, headerColor) {
   var range = sheet.getRange(row, column, numRows, numColumns);
+  var backgrounds = [];
+
+  for (var r = 0; r < numRows; r++) {
+    var rowBackgrounds = [];
+    for (var c = 0; c < numColumns; c++) {
+      rowBackgrounds.push(r === 0 ? headerColor : (r % 2 === 0 ? "#1E293B" : DASHBOARD_THEME.CARD));
+    }
+    backgrounds.push(rowBackgrounds);
+  }
+
   range
+    .setBackgrounds(backgrounds)
+    .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
     .setFontFamily("Arial")
     .setFontSize(10)
     .setHorizontalAlignment("center")
@@ -1490,8 +1516,8 @@ function getTrendIndicator_(difference, higherIsBetter) {
     return {
       indicator: "→",
       status: "Stable",
-      color: "#475569",
-      background: "#E2E8F0"
+      color: DASHBOARD_THEME.SECONDARY_TEXT,
+      background: DASHBOARD_THEME.SECTION
     };
   }
 
@@ -1500,8 +1526,8 @@ function getTrendIndicator_(difference, higherIsBetter) {
   return {
     indicator: difference > 0 ? "▲" : "▼",
     status: improved ? "Improved" : "Declined",
-    color: improved ? DASHBOARD_THEME.GREEN : DASHBOARD_THEME.RED,
-    background: improved ? "#DCFCE7" : "#FEE2E2"
+    color: improved ? DASHBOARD_THEME.SUCCESS : "#FCA5A5",
+    background: improved ? "#14532D" : "#7F1D1D"
   };
 }
 
@@ -1532,20 +1558,20 @@ function getOverallPerformanceStatus_(dailySummaryRows) {
   if (improved > declined) {
     return {
       label: "Improved",
-      color: DASHBOARD_THEME.GREEN
+      color: "#14532D"
     };
   }
 
   if (declined > improved) {
     return {
       label: "Declined",
-      color: DASHBOARD_THEME.RED
+      color: "#7F1D1D"
     };
   }
 
   return {
     label: "Stable",
-    color: "#64748b"
+    color: DASHBOARD_THEME.SECTION
   };
 }
 
@@ -1636,26 +1662,25 @@ function heatmapFiveColor_(value, minValue, maxValue, higherIsBetter) {
   var ratio = Math.max(0, Math.min(1, (value - minValue) / (maxValue - minValue)));
   var score = higherIsBetter ? ratio : 1 - ratio;
 
-  if (score >= 0.8) return "#166534";
-  if (score >= 0.6) return "#BBF7D0";
-  if (score >= 0.4) return "#FEF3C7";
-  if (score >= 0.2) return "#FED7AA";
-  return "#FECACA";
+  if (score >= 0.8) return "#14532D";
+  if (score >= 0.6) return "#166534";
+  if (score >= 0.4) return "#D4A017";
+  if (score >= 0.2) return "#B45309";
+  return "#991B1B";
 }
 
 function varianceHeatmapColor_(value) {
-  if (value > 0) return "#BBF7D0";
-  if (value < 0) return "#FECACA";
+  if (value > 0) return "#14532D";
+  if (value < 0) return "#991B1B";
   return DASHBOARD_THEME.LIGHT;
 }
 
 function slaHeatmapColor_(value, target) {
   if (value <= 0) return DASHBOARD_THEME.LIGHT;
   if (value <= target) return "#166534";
-  if (value <= target * 1.1) return "#BBF7D0";
-  if (value <= target * 1.25) return "#FEF3C7";
-  if (value <= target * 1.5) return "#FED7AA";
-  return "#FECACA";
+  if (value <= target * 1.1) return "#D4A017";
+  if (value <= target * 1.25) return "#B45309";
+  return "#991B1B";
 }
 
 function formatKpiValue_(value, valueType) {
