@@ -559,23 +559,18 @@ function updateWeeklyAnalytics() {
   var rcaData = rcaSheet.getDataRange().getValues();
   var rdbData = rdbSheet.getDataRange().getValues();
   var weekRanges = getPreviousAndCurrentWeekRanges_();
-  var hourlySummary = buildHourlySummary_(sourceSS);
-  var weeklyData = weekRanges.map(function(weekRange) {
+  var blocks = weekRanges.map(function(weekRange) {
     var pickerPerformance = buildWeeklyPickerPerformance_(sourceRecords, weekRange);
     var complaints = buildWeeklyComplaintAnalytics_(rcaData, weekRange);
     var bagDeviation = buildWeeklyBagDeviation_(rdbData, weekRange);
 
     return {
       weekKey: weekRange.weekKey,
-      weekRange: weekRange,
-      pickerPerformance: pickerPerformance,
-      complaints: complaints,
-      bagDeviation: bagDeviation,
-      summary: buildWeeklyExecutiveSummary_(sourceRecords, rcaData, hourlySummary, weekRange)
+      rows: buildWeeklyAnalyticsBlock_(weekRange, pickerPerformance, complaints, bagDeviation)
     };
   });
 
-  writeWeeklyExecutiveDashboard_(weeklySheet, buildWeeklyExecutiveDashboardRows_(weeklyData[0], weeklyData[1]));
+  writeWeeklyAnalyticsBlocks_(weeklySheet, blocks);
 }
 
 function updateDarkStoreDashboard() {
@@ -2525,268 +2520,6 @@ function buildUniqueCountTable_(data, options) {
   return output;
 }
 
-function buildWeeklyExecutiveSummary_(sourceRecords, rcaData, hourlySummary, weekRange) {
-  var summary = {
-    orders: 0,
-    items: 0,
-    avgAT: 0,
-    avgPT: 0,
-    avgPKT: 0,
-    p95: 0,
-    complaints: 0,
-    complaintPercent: 0,
-    ordersPerHour: 0,
-    itemsPerHour: 0,
-    avgItemsPerOrder: 0,
-    mostCommonComplaintType: ""
-  };
-  var orders = {};
-  var fulfillmentTimes = [];
-  var totalAcceptance = 0;
-  var totalPicking = 0;
-  var totalPacking = 0;
-
-  sourceRecords.forEach(function(record) {
-    if (!isInDateRange_(record.dateKey, weekRange.startKey, weekRange.endKey)) return;
-
-    if (!orders[record.orderNr]) {
-      orders[record.orderNr] = true;
-      totalAcceptance += record.acceptanceTime;
-      totalPicking += record.pickingTime;
-      totalPacking += record.packingTime;
-
-      if (record.fulfillmentTime > 0) {
-        fulfillmentTimes.push(record.fulfillmentTime);
-      }
-    }
-
-    summary.items += record.itemCount;
-  });
-
-  var complaintOrders = {};
-  var complaintTypes = {};
-
-  for (var i = 1; i < rcaData.length; i++) {
-    var complaintDate = normalizeDate_(rcaData[i][0]);
-    var orderNr = normalizeText_(rcaData[i][4]);
-    var complaintType = normalizeText_(rcaData[i][16]) || normalizeText_(rcaData[i][9]);
-
-    if (!complaintDate || !orderNr || !isInDateRange_(complaintDate, weekRange.startKey, weekRange.endKey)) continue;
-
-    complaintOrders[orderNr] = true;
-    if (complaintType) {
-      complaintTypes[complaintType] = (complaintTypes[complaintType] || 0) + 1;
-    }
-  }
-
-  var activeHours = getWeeklyActiveHours_(hourlySummary, weekRange);
-  summary.orders = Object.keys(orders).length;
-  summary.complaints = Object.keys(complaintOrders).length;
-  summary.avgAT = summary.orders > 0 ? totalAcceptance / summary.orders : 0;
-  summary.avgPT = summary.items > 0 ? totalPicking / summary.items : 0;
-  summary.avgPKT = summary.items > 0 ? totalPacking / summary.items : 0;
-  summary.p95 = calculatePercentile_(fulfillmentTimes, 0.95) / 60;
-  summary.complaintPercent = summary.orders > 0 ? (summary.complaints / summary.orders) * 100 : 0;
-  summary.ordersPerHour = activeHours > 0 ? summary.orders / activeHours : 0;
-  summary.itemsPerHour = activeHours > 0 ? summary.items / activeHours : 0;
-  summary.avgItemsPerOrder = summary.orders > 0 ? summary.items / summary.orders : 0;
-  summary.mostCommonComplaintType = getTopComplaintType_(complaintTypes);
-
-  return summary;
-}
-
-function getWeeklyActiveHours_(hourlySummary, weekRange) {
-  var activeHours = 0;
-
-  Object.keys(hourlySummary || {}).forEach(function(dateKey) {
-    if (!isInDateRange_(dateKey, weekRange.startKey, weekRange.endKey)) return;
-
-    hourlySummary[dateKey].forEach(function(bucket) {
-      if (Object.keys(bucket.orders).length > 0 || bucket.itemCount > 0) {
-        activeHours++;
-      }
-    });
-  });
-
-  return activeHours;
-}
-
-function getTopComplaintType_(complaintTypes) {
-  var topType = "";
-  var topCount = 0;
-
-  Object.keys(complaintTypes || {}).forEach(function(type) {
-    if (complaintTypes[type] > topCount) {
-      topType = type;
-      topCount = complaintTypes[type];
-    }
-  });
-
-  return topType || "No complaints";
-}
-
-function buildWeeklyExecutiveDashboardRows_(currentWeek, previousWeek) {
-  var rows = [[
-    "WEEKLY_ANALYTICS_WEEK",
-    currentWeek.weekKey,
-    "Week Status",
-    currentWeek.weekRange.status,
-    "Week Start",
-    currentWeek.weekRange.startKey,
-    "Week End",
-    currentWeek.weekRange.endKey,
-    "Updated At",
-    Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss")
-  ], [""]];
-
-  rows.push(["WEEKLY EXECUTIVE SUMMARY"]);
-  rows.push(["Metric", "Current Week", "Previous Week", "Difference", "Variance %"]);
-  rows = rows.concat(buildWeeklyComparisonRows_(currentWeek.summary, previousWeek.summary, [
-    ["Orders", "orders", "integer", true],
-    ["Items", "items", "integer", true],
-    ["AT", "avgAT", "decimal", false],
-    ["PT", "avgPT", "decimal", false],
-    ["PKT", "avgPKT", "decimal", false],
-    ["P95", "p95", "decimal", false],
-    ["Complaints", "complaints", "integer", false]
-  ]));
-  rows.push([""]);
-
-  addWeeklySection_(rows, "WEEK OVER WEEK PERFORMANCE", ["Metric", "Current Week", "Previous Week", "Difference", "Variance %"],
-    buildWeeklyComparisonRows_(currentWeek.summary, previousWeek.summary, [
-      ["Orders", "orders", "integer", true],
-      ["Items", "items", "integer", true],
-      ["AT", "avgAT", "decimal", false],
-      ["PT", "avgPT", "decimal", false],
-      ["PKT", "avgPKT", "decimal", false],
-      ["P95", "p95", "decimal", false],
-      ["Complaints", "complaints", "integer", false],
-      ["Complaint %", "complaintPercent", "percent", false]
-    ]));
-
-  addWeeklySection_(rows, "TOP PERFORMERS", ["Rank", "Picker", "Orders", "Items", "Complaint %", "Score"],
-    buildWeeklyPickerRankingRows_(currentWeek.pickerPerformance, currentWeek.complaints, false));
-
-  addWeeklySection_(rows, "BOTTOM OPPORTUNITIES", ["Rank", "Picker", "Orders", "Items", "Complaint %", "Score"],
-    buildWeeklyPickerRankingRows_(currentWeek.pickerPerformance, currentWeek.complaints, true));
-
-  addWeeklySection_(rows, "PRODUCTIVITY ANALYSIS", ["Metric", "Current Week", "Previous Week", "Difference", "Variance %"],
-    buildWeeklyComparisonRows_(currentWeek.summary, previousWeek.summary, [
-      ["Orders per Hour", "ordersPerHour", "decimal", true],
-      ["Items per Hour", "itemsPerHour", "decimal", true],
-      ["Average Items per Order", "avgItemsPerOrder", "decimal", true],
-      ["Complaint %", "complaintPercent", "percent", false]
-    ]));
-
-  addWeeklySection_(rows, "COMPLAINT ANALYSIS", ["Metric", "Current Week", "Previous Week", "Week-over-Week Change"],
-    buildWeeklyComplaintAnalysisRows_(currentWeek.summary, previousWeek.summary));
-
-  addWeeklySection_(rows, "KEY INSIGHTS", ["Insight"], buildWeeklyInsightRows_(currentWeek.summary, previousWeek.summary));
-
-  return rows;
-}
-
-function buildWeeklyComparisonRows_(currentSummary, previousSummary, definitions) {
-  return definitions.map(function(definition) {
-    var currentValue = toNumber_(currentSummary[definition[1]]);
-    var previousValue = toNumber_(previousSummary[definition[1]]);
-    var difference = currentValue - previousValue;
-    var variancePercent = previousValue !== 0 ? (difference / previousValue) * 100 : "";
-
-    return [
-      definition[0],
-      formatWeeklyValue_(currentValue, definition[2]),
-      formatWeeklyValue_(previousValue, definition[2]),
-      formatWeeklyValue_(difference, definition[2]),
-      variancePercent === "" ? "n/a" : formatVarianceText_(variancePercent)
-    ];
-  });
-}
-
-function buildWeeklyPickerRankingRows_(pickerPerformance, complaints, bottom) {
-  var complaintLookup = {};
-  complaints.pickers.forEach(function(row) {
-    complaintLookup[normalizeText_(row.key)] = row.uniqueOrderCount;
-  });
-
-  var rows = pickerPerformance.map(function(row) {
-    var complaintsForPicker = complaintLookup[normalizeText_(row.picker)] || 0;
-    var complaintPercent = row.uniqueOrderCount > 0 ? (complaintsForPicker / row.uniqueOrderCount) * 100 : 0;
-
-    return {
-      picker: row.picker,
-      orders: row.uniqueOrderCount,
-      items: row.itemCount,
-      complaintPercent: complaintPercent,
-      score: row.efficiency
-    };
-  });
-
-  rows.sort(function(a, b) {
-    if (bottom) {
-      return b.complaintPercent - a.complaintPercent || a.score - b.score || a.orders - b.orders ||
-        a.picker.localeCompare(b.picker);
-    }
-
-    return b.orders - a.orders || b.items - a.items || a.complaintPercent - b.complaintPercent ||
-      a.picker.localeCompare(b.picker);
-  });
-
-  return rows.slice(0, 5).map(function(row, index) {
-    return [
-      index + 1,
-      row.picker,
-      row.orders,
-      row.items,
-      formatWeeklyValue_(row.complaintPercent, "percent"),
-      round2_(row.score)
-    ];
-  });
-}
-
-function buildWeeklyComplaintAnalysisRows_(currentSummary, previousSummary) {
-  return [
-    ["Complaint Count", currentSummary.complaints, previousSummary.complaints, formatWeeklyValue_(currentSummary.complaints - previousSummary.complaints, "integer")],
-    ["Complaint %", formatWeeklyValue_(currentSummary.complaintPercent, "percent"), formatWeeklyValue_(previousSummary.complaintPercent, "percent"), formatVarianceText_(currentSummary.complaintPercent - previousSummary.complaintPercent)],
-    ["Most Common Complaint Type", currentSummary.mostCommonComplaintType, previousSummary.mostCommonComplaintType, currentSummary.mostCommonComplaintType === previousSummary.mostCommonComplaintType ? "No change" : "Changed"],
-    ["Week-over-Week Change", formatWeeklyValue_(currentSummary.complaints, "integer"), formatWeeklyValue_(previousSummary.complaints, "integer"), formatVarianceText_(previousSummary.complaints !== 0 ? ((currentSummary.complaints - previousSummary.complaints) / previousSummary.complaints) * 100 : "")]
-  ];
-}
-
-function buildWeeklyInsightRows_(currentSummary, previousSummary) {
-  var rows = [];
-  var definitions = [
-    ["Orders", "orders", true],
-    ["Items", "items", true],
-    ["AT", "avgAT", false],
-    ["Complaints", "complaints", false]
-  ];
-  var improved = 0;
-  var declined = 0;
-
-  definitions.forEach(function(definition) {
-    var currentValue = toNumber_(currentSummary[definition[1]]);
-    var previousValue = toNumber_(previousSummary[definition[1]]);
-    var difference = currentValue - previousValue;
-    var variancePercent = previousValue !== 0 ? (difference / previousValue) * 100 : "";
-    var trend = getTrendIndicator_(difference, definition[2]);
-
-    if (trend.status === "Improved") improved++;
-    if (trend.status === "Declined") declined++;
-
-    rows.push([definition[0] + " " + trend.status.toLowerCase() + " by " + (variancePercent === "" ? "n/a" : formatVarianceText_(variancePercent)) + "."]);
-  });
-
-  rows.push(["Overall Weekly Status: " + (improved > declined ? "Improved" : declined > improved ? "Declined" : "Stable")]);
-  return rows;
-}
-
-function formatWeeklyValue_(value, valueType) {
-  if (valueType === "integer") return formatNumber_(Math.round(toNumber_(value)), 0);
-  if (valueType === "percent") return formatNumber_(round2_(toNumber_(value)), 2) + "%";
-  return formatNumber_(round2_(toNumber_(value)), 2);
-}
-
 function buildWeeklyAnalyticsBlock_(weekRange, pickerPerformance, complaints, bagDeviation) {
   var updatedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
   var output = [
@@ -2940,12 +2673,6 @@ function writeWeeklyAnalyticsBlocks_(sheet, blocks) {
   formatWeeklyAnalyticsSheet_(sheet, rowsToWrite);
 }
 
-function writeWeeklyExecutiveDashboard_(sheet, rows) {
-  clearSheetContents_(sheet, 1, 1, Math.max(sheet.getLastRow(), 1), Math.max(sheet.getLastColumn(), 1));
-  writePaddedRows_(sheet, 1, 1, rows);
-  formatWeeklyAnalyticsSheet_(sheet, rows);
-}
-
 function writeWeeklyAnalyticsBlock_(sheet, weekKey, block) {
   var marker = "WEEKLY_ANALYTICS_WEEK";
   var preservedRows = [];
@@ -3053,7 +2780,6 @@ function formatWeeklyAnalyticsSheet_(sheet, rows) {
   usedRange
     .setHorizontalAlignment("center")
     .setVerticalAlignment("middle");
-  applyWeeklyComparisonFormatting_(sheet, rows);
   sheet.autoResizeColumns(1, Math.min(maxColumns, 12));
 }
 
@@ -3112,61 +2838,6 @@ function formatWeeklyTableRange_(sheet, startRow, endRow, maxColumns, isWeekHead
       .setFontSize(10)
       .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID);
   }
-}
-
-function applyWeeklyComparisonFormatting_(sheet, rows) {
-  for (var i = 1; i < rows.length; i++) {
-    var currentRow = rows[i] || [];
-    var headerRow = getWeeklyTableHeaderForRow_(rows, i);
-
-    if (isWeeklyComparisonHeader_(headerRow) && currentRow.length >= 4 && normalizeText_(currentRow[0]) !== "No data") {
-      var difference = parseWeeklyComparisonDifference_(currentRow[3]);
-      var trend = getTrendIndicator_(difference, isHigherBetterMetric_(currentRow[0]));
-      applyComparisonCellStyle_(sheet.getRange(i + 1, 2), trend.status);
-    }
-
-    if (isWithinWeeklyBottomSection_(rows, i)) {
-      sheet.getRange(i + 1, 1, 1, Math.max(currentRow.length, 1))
-        .setBackground("#4B2E2E")
-        .setFontColor("#FECACA");
-    }
-  }
-}
-
-function getWeeklyTableHeaderForRow_(rows, rowIndex) {
-  for (var i = rowIndex - 1; i >= 0; i--) {
-    if (isBlankRow_(rows[i])) return [];
-    if (isWeeklyComparisonHeader_(rows[i])) return rows[i];
-  }
-
-  return [];
-}
-
-function isWeeklyComparisonHeader_(row) {
-  return normalizeText_(row[1]) === "Current Week" &&
-    normalizeText_(row[2]) === "Previous Week" &&
-    (normalizeText_(row[3]) === "Difference" || normalizeText_(row[3]) === "Week-over-Week Change");
-}
-
-function parseWeeklyComparisonDifference_(value) {
-  var text = normalizeText_(value).replace("%", "").replace(/,/g, "");
-  var number = Number(text);
-  return isNaN(number) ? 0 : number;
-}
-
-function isWithinWeeklyBottomSection_(rows, rowIndex) {
-  var inBottomSection = false;
-
-  for (var i = rowIndex; i >= 0; i--) {
-    if (isBlankRow_(rows[i])) return false;
-    if (normalizeText_(rows[i][0]) === "BOTTOM OPPORTUNITIES") {
-      inBottomSection = true;
-      break;
-    }
-  }
-
-  return inBottomSection && normalizeText_(rows[rowIndex][0]) !== "BOTTOM OPPORTUNITIES" &&
-    normalizeText_(rows[rowIndex][0]) !== "Rank";
 }
 
 function isWeeklySectionTitleRow_(rows, rowIndex) {
