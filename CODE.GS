@@ -2267,9 +2267,9 @@ function buildComplaintIntelligenceRows_(data) {
   ];
 
   addComplaintSection_(output, "EXECUTIVE COMPLAINT SUMMARY", ["Metric", "Value", "Definition"], [
-    ["Total Complaints", stats.totalComplaints, "Raw complaint rows"],
-    ["Unique Orders Impacted", stats.uniqueOrders, "Distinct Order IDs"],
-    ["Complaint Rate %", formatComplaintPercent_(stats.complaintRate), "Complaints per impacted order from RCA data"],
+    ["Total Unique Orders", stats.totalUniqueOrders, "Distinct Order IDs in RCA data"],
+    ["Unique Orders With Complaints", stats.uniqueOrdersWithComplaints, "Distinct Order IDs with at least one complaint"],
+    ["Complaint Rate %", formatComplaintPercent_(stats.complaintRate), "Unique Orders With Complaints / Total Unique Orders"],
     ["Most Common RCA", stats.topRca.key || "No data", "Highest complaint count RCA"],
     ["Most Common RCA %", formatComplaintPercent_(stats.topRca.percent), "Share of total complaints"],
     ["Most Common Complaint Category", stats.topCategory.key || "No data", "Highest complaint count category"],
@@ -2359,8 +2359,10 @@ function buildComplaintStats_(records) {
     addComplaintSummaryItem_(stats.deliveryAgents, record.daId || record.daName || "Unknown DA", record.daName, record.orderId);
   });
 
-  stats.uniqueOrders = Object.keys(uniqueOrders).length;
-  stats.complaintRate = stats.uniqueOrders > 0 ? (stats.totalComplaints / stats.uniqueOrders) * 100 : 0;
+  stats.totalUniqueOrders = Object.keys(uniqueOrders).length;
+  stats.uniqueOrdersWithComplaints = stats.totalUniqueOrders;
+  stats.uniqueOrders = stats.uniqueOrdersWithComplaints;
+  stats.complaintRate = stats.totalUniqueOrders > 0 ? (stats.uniqueOrdersWithComplaints / stats.totalUniqueOrders) * 100 : 0;
   stats.rcaRows = sortComplaintSummary_(stats.rca, totalComplaints);
   stats.categoryRows = sortComplaintSummary_(stats.categories, totalComplaints);
   stats.skuRows = sortComplaintSummary_(stats.skus, totalComplaints);
