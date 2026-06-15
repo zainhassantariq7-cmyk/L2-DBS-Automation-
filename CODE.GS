@@ -340,7 +340,7 @@ function updateRdbHourly() {
       "PT",
       "PKT",
       "P95",
-      "Manpower Count",
+      "MP Count",
       "Kamal Team Count",
       "Minhaj Team Count",
       "Tawhid Team Count"
@@ -3020,10 +3020,9 @@ function countScheduledRosterForHour_(roster, pocMapping, dateKey, hour) {
   if (!dateKey || hour === null || hour === undefined || normalizeText_(hour) === "Total") return counts;
 
   var weekday = getWeekdayName_(dateKey);
-  var previousWeekday = getPreviousWeekdayName_(dateKey);
 
   roster.forEach(function(shift) {
-    if (!isShiftActiveForHour_(shift, weekday, previousWeekday, hour)) return;
+    if (!isShiftActiveForHour_(shift, weekday, hour)) return;
 
     var poc = getPocForPicker_(shift.employee, pocMapping);
     counts.total++;
@@ -3033,17 +3032,18 @@ function countScheduledRosterForHour_(roster, pocMapping, dateKey, hour) {
   return counts;
 }
 
-function isShiftActiveForHour_(shift, weekday, previousWeekday, hour) {
+function isShiftActiveForHour_(shift, weekday, hour) {
+  if (shift.weekday !== weekday) return false;
+
   if (shift.startHour === shift.endHour) {
-    return shift.weekday === weekday;
+    return true;
   }
 
   if (shift.startHour < shift.endHour) {
-    return shift.weekday === weekday && hour >= shift.startHour && hour < shift.endHour;
+    return hour >= shift.startHour && hour < shift.endHour;
   }
 
-  return (shift.weekday === weekday && hour >= shift.startHour) ||
-    (shift.weekday === previousWeekday && hour < shift.endHour);
+  return hour >= shift.startHour || hour < shift.endHour;
 }
 
 function updateHourlyManpowerTotals_(hourlySheet) {
@@ -3117,14 +3117,6 @@ function getWeekdayName_(dateKey) {
   var date = parseDateKey_(dateKey);
   if (!date) return "";
 
-  return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][date.getDay()];
-}
-
-function getPreviousWeekdayName_(dateKey) {
-  var date = parseDateKey_(dateKey);
-  if (!date) return "";
-
-  date.setDate(date.getDate() - 1);
   return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][date.getDay()];
 }
 
