@@ -22,7 +22,10 @@ var CONFIG = {
     RCA_DATABASE: "YEARLY_RCA_DATABASE",
     WEEKLY_ANALYTICS: "Weekly Analytics",
     DARK_STORE_GRAPHS: "Dark Store Graphs",
-    DARK_STORE_DATA: "DARK_STORE_DATA"
+    DARK_STORE_DATA: "DARK_STORE_DATA",
+    POC_MAPPING: "POC_MAPPING",
+    POC_MANUAL_INPUT: "POC_MANUAL_INPUT",
+    POC_SCORECARD: "POC_SCORECARD"
   },
 
   PROPERTIES: {
@@ -42,6 +45,54 @@ var CONFIG = {
     "zain hassan": "Jabbarul Islam",
     "jabbarul islam": "Jabbarul Islam"
   }
+};
+
+var POC_NAMES = ["Kamal", "Minhaj", "Tawhid"];
+
+var DEFAULT_POC_MAPPINGS = [
+  ["Md Kamal Ahmed", "Kamal", "Kamal Team", true],
+  ["MD Rakib Hossan", "Kamal", "Kamal Team", true],
+  ["MD Sobuj", "Kamal", "Kamal Team", true],
+  ["MD Anik", "Kamal", "Kamal Team", true],
+  ["Md Minhaj Abedin", "Minhaj", "Minhaj Team", true],
+  ["Emamul Hok", "Minhaj", "Minhaj Team", true],
+  ["Md Shimul", "Minhaj", "Minhaj Team", true],
+  ["Sunbim Sarid Moon", "Minhaj", "Minhaj Team", true],
+  ["Md Apon Ahmed", "Minhaj", "Minhaj Team", true],
+  ["Md Tawhid", "Tawhid", "Tawhid Team", true],
+  ["Jabbarul Islam", "Tawhid", "Tawhid Team", true],
+  ["Saikat Sohhain Bhuiyan", "Tawhid", "Tawhid Team", true]
+];
+
+var POC_SCORE_WEIGHTS = {
+  OPERATIONS: 0.30,
+  COMPLAINT: 0.25,
+  BAU: 0.20,
+  INVENTORY: 0.15,
+  COMPLIANCE: 0.10
+};
+
+var POC_BAU_OWNERSHIP = {
+  "Offload AM": { Tawhid: 0.75, Minhaj: 0.25 },
+  "Offload CHL": { Tawhid: 0.75, Minhaj: 0.25 },
+  "Offload FZR": { Tawhid: 0.75, Minhaj: 0.25 },
+  "Offload UF": { Tawhid: 0.75, Minhaj: 0.25 },
+  "Putaway AM": { Tawhid: 0.75, Minhaj: 0.25 },
+  "Putaway CHL": { Tawhid: 0.75, Minhaj: 0.25 },
+  "Putaway FZR": { Tawhid: 0.75, Minhaj: 0.25 },
+  "Putaway UF": { Tawhid: 0.75, Minhaj: 0.25 },
+  "FSQ": { Kamal: 0.5, Minhaj: 0.5 },
+  "Expiry Adherence": { Tawhid: 1 },
+  "Chiller Movement": { Kamal: 0.5, Minhaj: 0.5 },
+  "Cycle Count": { Kamal: 0.5, Tawhid: 0.5 }
+};
+
+var POC_COMPLIANCE_OWNERSHIP = {
+  "Hygiene Form Updated": { Kamal: 1, Minhaj: 1, Tawhid: 1 },
+  "RTV Handover": { Kamal: 1 },
+  "Warehouse Handover": { Minhaj: 1 },
+  "Vendor Receiving": { Kamal: 1 },
+  "Warehouse Receiving": { Minhaj: 1, Tawhid: 1 }
 };
 
 var GRAPH_LAYOUT = {
@@ -176,6 +227,7 @@ function updateRawDatabase() {
 
   var destSheet = getRequiredSheet_(destSS, CONFIG.SHEETS.RDB);
   var rcaSheet = getRequiredSheet_(rcaSS, CONFIG.SHEETS.RCA_DATABASE);
+  var pocMapping = getPocMapping_(ensurePocMappingSheet_(destSS));
 
   var existingManualInputs = readExistingRdbManualInputs_(destSheet);
   var existingManualRows = readExistingRdbManualRows_(destSheet);
@@ -186,7 +238,7 @@ function updateRawDatabase() {
     [
       "Date",
       "Picker Name",
-      "",
+      "POC",
       "Order Count",
       "Item Count",
       "AT",
@@ -215,7 +267,7 @@ function updateRawDatabase() {
     dataRows.push([
       row.dateKey,
       row.picker,
-      "",
+      getPocForPicker_(row.picker, pocMapping),
       orderCount,
       row.itemCount,
       orderCount > 0 ? row.totalAcceptance / orderCount : 0,
@@ -230,6 +282,7 @@ function updateRawDatabase() {
 
   existingManualRows.forEach(function(manualRow) {
     if (!summary[manualRow.key]) {
+      manualRow.row[2] = getPocForPicker_(manualRow.row[1], pocMapping);
       dataRows.push(manualRow.row);
     }
   });
@@ -471,6 +524,507 @@ function updateMTDDashboard() {
 
   clearSheetContents_(mtdSheet, 1, 1, Math.max(mtdSheet.getLastRow(), 1), 18);
   mtdSheet.getRange(1, 1, output.length, output[0].length).setValues(output);
+  updatePocPerformanceSystem_(ss, mtdSheet, rows, mtdMonthKey);
+}
+
+function updatePocPerformanceSystem_(spreadsheet, mtdSheet, pickerRows, monthKey) {
+  var mappingSheet = ensurePocMappingSheet_(spreadsheet);
+  var manualSheet = ensurePocManualInputSheet_(spreadsheet);
+  var scorecardSheet = getOrCreateSheet_(spreadsheet, CONFIG.SHEETS.POC_SCORECARD);
+  var pocMapping = getPocMapping_(mappingSheet);
+  var manualSummary = getPocManualSummary_(manualSheet, monthKey);
+  var bauSummary = getPocBauSummary_(spreadsheet, monthKey);
+  var pocRows = buildPocPerformanceRows_(pickerRows, pocMapping, manualSummary, bauSummary);
+
+  renderPocPerformanceDashboard_(mtdSheet, pocRows);
+  renderPocScorecard_(scorecardSheet, pocRows, monthKey);
+}
+
+function ensurePocMappingSheet_(spreadsheet) {
+  var sheet = getOrCreateSheet_(spreadsheet, CONFIG.SHEETS.POC_MAPPING);
+  var header = ["Picker Name", "POC", "Team", "Active"];
+
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+    sheet.getRange(2, 1, DEFAULT_POC_MAPPINGS.length, header.length).setValues(DEFAULT_POC_MAPPINGS);
+  } else if (normalizeText_(sheet.getRange(1, 1).getValue()) !== "Picker Name") {
+    sheet.insertRowsBefore(1, 1);
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+  } else if (sheet.getLastRow() < 2) {
+    sheet.getRange(2, 1, DEFAULT_POC_MAPPINGS.length, header.length).setValues(DEFAULT_POC_MAPPINGS);
+  }
+
+  sheet.hideSheet();
+  return sheet;
+}
+
+function ensurePocManualInputSheet_(spreadsheet) {
+  var sheet = getOrCreateSheet_(spreadsheet, CONFIG.SHEETS.POC_MANUAL_INPUT);
+  var header = [
+    "Date",
+    "POC",
+    "Hygiene Form Updated",
+    "RTV Handover",
+    "Warehouse Handover",
+    "Vendor Receiving",
+    "Warehouse Receiving",
+    "Variance Qty",
+    "Variance SAR",
+    "Adjusted",
+    "Remarks"
+  ];
+
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+  } else if (normalizeText_(sheet.getRange(1, 1).getValue()) !== "Date") {
+    sheet.insertRowsBefore(1, 1);
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+  }
+
+  formatPocInputSheet_(sheet, header.length);
+  return sheet;
+}
+
+function getPocMapping_(sheet) {
+  var mapping = {};
+  var data = sheet.getDataRange().getValues();
+
+  for (var i = 1; i < data.length; i++) {
+    var picker = normalizeText_(data[i][0]);
+    var poc = normalizeText_(data[i][1]);
+    var active = data[i][3] === true || normalizeForCompare_(data[i][3]) === "true" || normalizeText_(data[i][3]) === "1";
+
+    if (picker && poc && active) {
+      mapping[normalizeForCompare_(picker)] = poc;
+    }
+  }
+
+  return mapping;
+}
+
+function getPocForPicker_(picker, mapping) {
+  return mapping[normalizeForCompare_(picker)] || "Unassigned";
+}
+
+function buildPocPerformanceRows_(pickerRows, pocMapping, manualSummary, bauSummary) {
+  var summaries = {};
+  var totalOrders = 0;
+  var totalItems = 0;
+
+  POC_NAMES.forEach(function(poc) {
+    summaries[poc] = createPocSummary_(poc);
+  });
+
+  pickerRows.forEach(function(row) {
+    var picker = normalizeText_(row[0]);
+    var poc = getPocForPicker_(picker, pocMapping);
+    if (!summaries[poc]) return;
+
+    var summary = summaries[poc];
+    var orders = toNumber_(row[1]);
+    var items = toNumber_(row[2]);
+    var complaints = toNumber_(row[3]);
+    var avgAT = toNumber_(row[8]);
+    var avgPT = toNumber_(row[9]);
+    var avgPKT = toNumber_(row[10]);
+    var avgP95 = toNumber_(row[11]);
+    var bagDeviation = toNumber_(row[12]);
+    var merchandising = toNumber_(row[14]);
+    var mtdScore = toNumber_(row[16]);
+
+    totalOrders += orders;
+    totalItems += items;
+    summary.orders += orders;
+    summary.items += items;
+    summary.complaints += complaints;
+    summary.atWeighted += avgAT * orders;
+    summary.ptWeighted += avgPT * items;
+    summary.pktWeighted += avgPKT * items;
+    summary.p95Weighted += avgP95 * orders;
+    summary.bagDeviationTotal += bagDeviation;
+    summary.merchandisingTotal += merchandising;
+    summary.operationsScoreWeighted += mtdScore * Math.max(orders, 1);
+    summary.operationsWeight += Math.max(orders, 1);
+    summary.pickerCount++;
+  });
+
+  var rows = POC_NAMES.map(function(poc) {
+    var summary = summaries[poc];
+    var manual = manualSummary[poc] || createPocManualSummary_();
+    var bauScore = bauSummary[poc] || 0;
+    var complaintPercent = summary.orders > 0 ? (summary.complaints / summary.orders) * 100 : 0;
+    var operationsScore = summary.operationsWeight > 0 ? summary.operationsScoreWeighted / summary.operationsWeight : 0;
+    var complaintScore = calculatePocComplaintScore_(complaintPercent);
+    var finalScore = calculatePocFinalScore_(
+      operationsScore,
+      complaintScore,
+      bauScore,
+      manual.inventoryScore,
+      manual.complianceScore
+    );
+
+    return {
+      poc: poc,
+      orders: summary.orders,
+      items: summary.items,
+      ordersContribution: totalOrders > 0 ? (summary.orders / totalOrders) * 100 : 0,
+      itemsContribution: totalItems > 0 ? (summary.items / totalItems) * 100 : 0,
+      itemsPerOrder: summary.orders > 0 ? summary.items / summary.orders : 0,
+      avgAT: summary.orders > 0 ? summary.atWeighted / summary.orders : 0,
+      avgPT: summary.items > 0 ? summary.ptWeighted / summary.items : 0,
+      avgPKT: summary.items > 0 ? summary.pktWeighted / summary.items : 0,
+      avgP95: summary.orders > 0 ? summary.p95Weighted / summary.orders : 0,
+      complaints: summary.complaints,
+      complaintPercent: complaintPercent,
+      avgBagDeviation: summary.pickerCount > 0 ? summary.bagDeviationTotal / summary.pickerCount : 0,
+      merchandising: summary.pickerCount > 0 ? summary.merchandisingTotal / summary.pickerCount : 0,
+      bauScore: bauScore,
+      operationsScore: operationsScore,
+      complaintScore: complaintScore,
+      inventoryScore: manual.inventoryScore,
+      complianceScore: manual.complianceScore,
+      openVarianceQty: manual.openVarianceQty,
+      openVarianceSar: manual.openVarianceSar,
+      finalScore: finalScore
+    };
+  }).sort(function(a, b) {
+    return b.finalScore - a.finalScore || a.poc.localeCompare(b.poc);
+  });
+
+  rows.forEach(function(row, index) {
+    row.rank = index + 1;
+  });
+
+  return rows;
+}
+
+function createPocSummary_(poc) {
+  return {
+    poc: poc,
+    orders: 0,
+    items: 0,
+    complaints: 0,
+    atWeighted: 0,
+    ptWeighted: 0,
+    pktWeighted: 0,
+    p95Weighted: 0,
+    bagDeviationTotal: 0,
+    merchandisingTotal: 0,
+    operationsScoreWeighted: 0,
+    operationsWeight: 0,
+    pickerCount: 0
+  };
+}
+
+function getPocBauSummary_(spreadsheet, monthKey) {
+  var sheet = spreadsheet.getSheetByName("BAU_HISTORY");
+  var result = {};
+  POC_NAMES.forEach(function(poc) {
+    result[poc] = 0;
+  });
+
+  if (!sheet || sheet.getLastRow() < 2) return result;
+
+  var data = sheet.getDataRange().getValues();
+  var header = data[0];
+  var metricColumns = {};
+  header.forEach(function(name, index) {
+    metricColumns[normalizeText_(name)] = index;
+  });
+  var metricTotals = {};
+  var metricCounts = {};
+
+  for (var i = 1; i < data.length; i++) {
+    var dateKey = normalizeDate_(data[i][0]);
+    if (getMonthKey_(dateKey) !== monthKey) continue;
+
+    Object.keys(POC_BAU_OWNERSHIP).forEach(function(metric) {
+      var column = metricColumns[metric];
+      if (column === undefined) return;
+      metricTotals[metric] = (metricTotals[metric] || 0) + toNumber_(data[i][column]);
+      metricCounts[metric] = (metricCounts[metric] || 0) + 1;
+    });
+  }
+
+  POC_NAMES.forEach(function(poc) {
+    var weightedTotal = 0;
+    var weight = 0;
+    Object.keys(POC_BAU_OWNERSHIP).forEach(function(metric) {
+      var ownership = POC_BAU_OWNERSHIP[metric][poc] || 0;
+      if (ownership <= 0 || !metricCounts[metric]) return;
+      weightedTotal += (metricTotals[metric] / metricCounts[metric]) * ownership;
+      weight += ownership;
+    });
+    result[poc] = weight > 0 ? weightedTotal / weight : 0;
+  });
+
+  return result;
+}
+
+function getPocManualSummary_(sheet, monthKey) {
+  var result = {};
+  POC_NAMES.forEach(function(poc) {
+    result[poc] = createPocManualSummary_();
+  });
+
+  if (sheet.getLastRow() < 2) return result;
+
+  var data = sheet.getDataRange().getValues();
+  var header = data[0];
+  var columns = {};
+  header.forEach(function(name, index) {
+    columns[normalizeText_(name)] = index;
+  });
+
+  for (var i = 1; i < data.length; i++) {
+    var dateKey = normalizeDate_(data[i][columns["Date"]]);
+    var poc = normalizeText_(data[i][columns["POC"]]);
+    if (getMonthKey_(dateKey) !== monthKey || !result[poc]) continue;
+
+    var summary = result[poc];
+    Object.keys(POC_COMPLIANCE_OWNERSHIP).forEach(function(field) {
+      if (!POC_COMPLIANCE_OWNERSHIP[field][poc] || columns[field] === undefined) return;
+      summary.complianceTotal++;
+      if (isPocManualYes_(data[i][columns[field]])) summary.complianceMet++;
+    });
+
+    if (!isPocManualYes_(data[i][columns["Adjusted"]])) {
+      summary.openVarianceCount++;
+      summary.openVarianceQty += toNumber_(data[i][columns["Variance Qty"]]);
+      summary.openVarianceSar += toNumber_(data[i][columns["Variance SAR"]]);
+    }
+  }
+
+  POC_NAMES.forEach(function(poc) {
+    var summary = result[poc];
+    summary.complianceScore = summary.complianceTotal > 0 ? (summary.complianceMet / summary.complianceTotal) * 100 : 0;
+    summary.inventoryScore = calculatePocInventoryScore_(summary);
+  });
+
+  return result;
+}
+
+function createPocManualSummary_() {
+  return {
+    complianceMet: 0,
+    complianceTotal: 0,
+    complianceScore: 0,
+    openVarianceCount: 0,
+    openVarianceQty: 0,
+    openVarianceSar: 0,
+    inventoryScore: 100
+  };
+}
+
+function isPocManualYes_(value) {
+  var text = normalizeForCompare_(value);
+  return value === true || text === "yes" || text === "true" || text === "done" || text === "completed" || text === "adjusted" || text === "1";
+}
+
+function calculatePocInventoryScore_(summary) {
+  var penalty = (summary.openVarianceCount * 10) +
+    Math.min(40, Math.abs(summary.openVarianceQty) * 2) +
+    Math.min(50, Math.abs(summary.openVarianceSar) / 100);
+  return Math.max(0, 100 - penalty);
+}
+
+function calculatePocComplaintScore_(complaintPercent) {
+  if (complaintPercent <= 0.4) return 100;
+  if (complaintPercent < 0.7) return 75;
+  if (complaintPercent <= 1) return 50;
+  return 0;
+}
+
+function calculatePocFinalScore_(operationsScore, complaintScore, bauScore, inventoryScore, complianceScore) {
+  return round2_(
+    (toNumber_(operationsScore) * POC_SCORE_WEIGHTS.OPERATIONS) +
+    (toNumber_(complaintScore) * POC_SCORE_WEIGHTS.COMPLAINT) +
+    (toNumber_(bauScore) * POC_SCORE_WEIGHTS.BAU) +
+    (toNumber_(inventoryScore) * POC_SCORE_WEIGHTS.INVENTORY) +
+    (toNumber_(complianceScore) * POC_SCORE_WEIGHTS.COMPLIANCE)
+  );
+}
+
+function renderPocPerformanceDashboard_(sheet, pocRows) {
+  var startRow = 21;
+  var rows = [[
+    "POC",
+    "MTD Orders",
+    "MTD Items",
+    "Orders Contribution %",
+    "Items Contribution %",
+    "Items Per Order",
+    "Avg AT",
+    "Avg PT",
+    "Avg PKT",
+    "Avg P95",
+    "Complaint Count",
+    "Complaint %",
+    "Avg Bag Deviation",
+    "Merchandising %",
+    "BAU Adherence %",
+    "Open Variance Qty",
+    "Open Variance SAR",
+    "Final Score",
+    "Rank"
+  ]];
+
+  pocRows.sort(function(a, b) {
+    return a.poc.localeCompare(b.poc);
+  }).forEach(function(row) {
+    rows.push([
+      row.poc,
+      row.orders,
+      row.items,
+      round2_(row.ordersContribution),
+      round2_(row.itemsContribution),
+      round2_(row.itemsPerOrder),
+      round2_(row.avgAT),
+      round2_(row.avgPT),
+      round2_(row.avgPKT),
+      round2_(row.avgP95),
+      row.complaints,
+      round2_(row.complaintPercent),
+      round2_(row.avgBagDeviation),
+      round2_(row.merchandising),
+      round2_(row.bauScore),
+      round2_(row.openVarianceQty),
+      round2_(row.openVarianceSar),
+      round2_(row.finalScore),
+      row.rank
+    ]);
+  });
+
+  clearSheetContents_(sheet, startRow, 1, Math.max(sheet.getLastRow() - startRow + 1, 1), 20);
+  sheet.getRange(startRow, 1).setValue("POC PERFORMANCE DASHBOARD");
+  sheet.getRange(startRow + 1, 1, rows.length, rows[0].length).setValues(rows);
+  formatPocDashboardRange_(sheet, startRow, rows.length + 1, rows[0].length);
+}
+
+function renderPocScorecard_(sheet, pocRows, monthKey) {
+  sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).breakApart();
+  sheet.clear();
+  ensureSheetSize_(sheet, 30, 12);
+  sheet.setHiddenGridlines(true);
+  sheet.setTabColor(DASHBOARD_THEME.BACKGROUND);
+  sheet.getRange(1, 1, 30, 12).setBackground(DASHBOARD_THEME.BACKGROUND).setFontColor(DASHBOARD_THEME.SECONDARY_TEXT).setFontFamily("Arial");
+
+  var sorted = pocRows.slice().sort(function(a, b) {
+    return b.finalScore - a.finalScore || a.poc.localeCompare(b.poc);
+  });
+  var totalOpenVariances = pocRows.reduce(function(total, row) {
+    return total + Math.abs(row.openVarianceQty);
+  }, 0);
+  var totalVarianceSar = pocRows.reduce(function(total, row) {
+    return total + Math.abs(row.openVarianceSar);
+  }, 0);
+  var summaryRows = [
+    ["Total Open Variances", round2_(totalOpenVariances)],
+    ["Total Variance SAR", round2_(totalVarianceSar)],
+    ["Best POC", sorted[0] ? sorted[0].poc : "-"],
+    ["Worst POC", sorted[sorted.length - 1] ? sorted[sorted.length - 1].poc : "-"],
+    ["Current Month", monthKey]
+  ];
+  var scoreRows = [[
+    "POC",
+    "Operations Score",
+    "Complaint Score",
+    "BAU Score",
+    "Inventory Score",
+    "Compliance Score",
+    "Open Variance Qty",
+    "Open Variance SAR",
+    "Final Score",
+    "Rank"
+  ]];
+
+  sorted.forEach(function(row, index) {
+    scoreRows.push([
+      row.poc,
+      round2_(row.operationsScore),
+      round2_(row.complaintScore),
+      round2_(row.bauScore),
+      round2_(row.inventoryScore),
+      round2_(row.complianceScore),
+      round2_(row.openVarianceQty),
+      round2_(row.openVarianceSar),
+      round2_(row.finalScore),
+      index + 1
+    ]);
+  });
+
+  sheet.getRange(1, 1).setValue("POC SCORECARD");
+  sheet.getRange(2, 1, summaryRows.length, summaryRows[0].length).setValues(summaryRows);
+  sheet.getRange(8, 1, scoreRows.length, scoreRows[0].length).setValues(scoreRows);
+  formatPocScorecard_(sheet, summaryRows.length, scoreRows.length, scoreRows[0].length);
+}
+
+function formatPocDashboardRange_(sheet, startRow, rowCount, columnCount) {
+  sheet.getRange(startRow, 1, 1, columnCount)
+    .setBackground(DASHBOARD_THEME.NAVY)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold")
+    .setFontSize(15)
+    .setHorizontalAlignment("center");
+  sheet.getRange(startRow + 1, 1, 1, columnCount)
+    .setBackground(DASHBOARD_THEME.SECTION)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold")
+    .setFontSize(10);
+  if (rowCount > 2) {
+    sheet.getRange(startRow + 2, 1, rowCount - 2, columnCount)
+      .setBackground(DASHBOARD_THEME.CARD)
+      .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
+      .setFontSize(10);
+  }
+  sheet.getRange(startRow, 1, rowCount, columnCount)
+    .setFontFamily("Arial")
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle")
+    .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  sheet.autoResizeColumns(1, Math.min(columnCount, 19));
+}
+
+function formatPocScorecard_(sheet, summaryCount, scoreRowCount, scoreColumnCount) {
+  sheet.getRange(1, 1, 1, scoreColumnCount)
+    .setBackground(DASHBOARD_THEME.NAVY)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold")
+    .setFontSize(22);
+  sheet.getRange(2, 1, summaryCount, 2)
+    .setBackground(DASHBOARD_THEME.CARD)
+    .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
+    .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  sheet.getRange(8, 1, 1, scoreColumnCount)
+    .setBackground(DASHBOARD_THEME.SECTION)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold");
+  sheet.getRange(9, 1, Math.max(scoreRowCount - 1, 1), scoreColumnCount)
+    .setBackground(DASHBOARD_THEME.CARD)
+    .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT);
+  sheet.getRange(8, 1, scoreRowCount, scoreColumnCount)
+    .setFontFamily("Arial")
+    .setFontSize(10)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle")
+    .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  sheet.autoResizeColumns(1, scoreColumnCount);
+}
+
+function formatPocInputSheet_(sheet, headerLength) {
+  var lastRow = Math.max(sheet.getLastRow(), 1);
+  sheet.getRange(1, 1, lastRow, headerLength)
+    .setFontFamily("Arial")
+    .setFontSize(10)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle")
+    .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  sheet.getRange(1, 1, 1, headerLength)
+    .setBackground(DASHBOARD_THEME.SECTION)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold");
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, headerLength);
 }
 
 function updateComplaintAnalysis() {
