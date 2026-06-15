@@ -49,6 +49,15 @@ var CONFIG = {
 
 var POC_NAMES = ["Kamal", "Minhaj", "Tawhid"];
 
+var POC_NAME_ALIASES = {
+  "kamal": "Kamal",
+  "mohammed kamal ahmed": "Kamal",
+  "minhaj": "Minhaj",
+  "minah abeddin": "Minhaj",
+  "md tawhid": "Tawhid",
+  "tawhid": "Tawhid"
+};
+
 var DEFAULT_POC_MAPPINGS = [
   ["Md Kamal Ahmed", "Kamal", "Kamal Team", true],
   ["MD Rakib Hossan", "Kamal", "Kamal Team", true],
@@ -591,7 +600,7 @@ function getPocMapping_(sheet) {
 
   for (var i = 1; i < data.length; i++) {
     var picker = normalizeText_(data[i][0]);
-    var poc = normalizeText_(data[i][1]);
+    var poc = normalizePocName_(data[i][1]);
     var active = data[i][3] === true || normalizeForCompare_(data[i][3]) === "true" || normalizeText_(data[i][3]) === "1";
 
     if (picker && poc && active) {
@@ -603,7 +612,13 @@ function getPocMapping_(sheet) {
 }
 
 function getPocForPicker_(picker, mapping) {
-  return mapping[normalizeForCompare_(picker)] || "Unassigned";
+  return normalizePocName_(mapping[normalizeForCompare_(picker)] || "Unassigned");
+}
+
+function normalizePocName_(poc) {
+  var name = normalizeText_(poc);
+  var alias = POC_NAME_ALIASES[normalizeForCompare_(name)];
+  return alias || name;
 }
 
 function buildPocPerformanceRows_(pickerRows, pocMapping, manualSummary, bauSummary) {
@@ -778,7 +793,7 @@ function getPocManualSummary_(sheet, monthKey) {
 
   for (var i = 1; i < data.length; i++) {
     var dateKey = normalizeDate_(data[i][columns["Date"]]);
-    var poc = normalizeText_(data[i][columns["POC"]]);
+    var poc = normalizePocName_(data[i][columns["POC"]]);
     if (getMonthKey_(dateKey) !== monthKey || !result[poc]) continue;
 
     var summary = result[poc];
