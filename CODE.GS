@@ -13,9 +13,6 @@ var CONFIG = {
   SOURCE_ID: "1JgoGkQI2UnY8YtLW9hIY-ltiM9-zGdpUhGp4VVC0Z3w",
   DEST_ID: "1fzm2CVWE8bJed1_OZOsBuMiAZz9E5f4p6QZFXk-0N2c",
   RCA_ID: "1FRvGqkmuA0irw8L5fJv8Q9aCoQH5ViC-eXys9XDAbMo",
-  BAU_SOURCE_ID: "1tsolH7eezhIbe5rUgzrROIfh18q6ym_XdXao48R2ra8",
-  BAU_SOURCE_SHEET: "Metrics View D-1",
-  BAU_DS_CODE: "RUHDS48",
 
   SHEETS: {
     RDB: "RDB",
@@ -25,10 +22,7 @@ var CONFIG = {
     RCA_DATABASE: "YEARLY_RCA_DATABASE",
     WEEKLY_ANALYTICS: "Weekly Analytics",
     DARK_STORE_GRAPHS: "Dark Store Graphs",
-    DARK_STORE_DATA: "DARK_STORE_DATA",
-    BAU_LIVE: "BAU_LIVE",
-    BAU_HISTORY: "BAU_HISTORY",
-    BAU_RAW: "BAU_RAW"
+    DARK_STORE_DATA: "DARK_STORE_DATA"
   },
 
   PROPERTIES: {
@@ -49,21 +43,6 @@ var CONFIG = {
     "jabbarul islam": "Jabbarul Islam"
   }
 };
-
-var BAU_METRICS = [
-  "Offload AM",
-  "Offload CHL",
-  "Offload FZR",
-  "Offload UF",
-  "Putaway AM",
-  "Putaway CHL",
-  "Putaway FZR",
-  "Putaway UF",
-  "FSQ",
-  "Expiry Adherence",
-  "Chiller Movement",
-  "Cycle Count"
-];
 
 var GRAPH_LAYOUT = {
   DASHBOARD_MIN_ROWS: 130,
@@ -130,7 +109,6 @@ function runAll() {
   updateMTDDashboard();
   updateComplaintAnalysis();
   updateWeeklyAnalytics();
-  updateBauTracking();
   updateDarkStoreDashboard();
 }
 
@@ -539,379 +517,536 @@ function updateWeeklyAnalytics() {
   writeWeeklyAnalyticsBlocks_(weeklySheet, blocks);
 }
 
-function updateBauTracking() {
-  var sourceSS = SpreadsheetApp.openById(CONFIG.BAU_SOURCE_ID);
-  var destSS = SpreadsheetApp.openById(CONFIG.DEST_ID);
-  var sourceSheet = getRequiredSheet_(sourceSS, CONFIG.BAU_SOURCE_SHEET);
-  var liveSheet = getOrCreateSheet_(destSS, CONFIG.SHEETS.BAU_LIVE);
-  var historySheet = getOrCreateSheet_(destSS, CONFIG.SHEETS.BAU_HISTORY);
-  var rawSheet = getOrCreateSheet_(destSS, CONFIG.SHEETS.BAU_RAW);
-  var sourceData = sourceSheet.getDataRange().getValues();
-  var bauData = buildBauSnapshotFromSource_(sourceData);
+function runBauModule() {
+  var config = {
+    sourceId: "1tsolH7eezhIbe5rUgzrROIfh18q6ym_XdXao48R2ra8",
+    sourceSheetName: "Metrics View D-1",
+    dsCode: "RUHDS48",
+    sheets: {
+      live: "BAU_LIVE",
+      history: "BAU_HISTORY",
+      raw: "BAU_RAW"
+    },
+    metrics: [
+      "Offload AM",
+      "Offload CHL",
+      "Offload FZR",
+      "Offload UF",
+      "Putaway AM",
+      "Putaway CHL",
+      "Putaway FZR",
+      "Putaway UF",
+      "FSQ",
+      "Expiry Adherence",
+      "Chiller Movement",
+      "Cycle Count"
+    ],
+    dateHeaders: ["Date", "Business Date", "Metric Date", "Snapshot Date", "Report Date", "Day"],
+    target: 100,
+    theme: {
+      background: "#0B1320",
+      card: "#172033",
+      section: "#22304A",
+      border: "#344055",
+      primary: "#FFFFFF",
+      secondary: "#CBD5E1",
+      muted: "#94A3B8",
+      successBg: "#1F3B2D",
+      successText: "#A7F3D0",
+      declineBg: "#4B2E2E",
+      declineText: "#FECACA",
+      neutralBg: "#334155",
+      neutralText: "#CBD5E1",
+      navy: "#111827"
+    }
+  };
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
 
-  writeBauRaw_(rawSheet, bauData.rawRows);
-  upsertBauHistory_(historySheet, bauData.snapshot);
-  renderBauLiveDashboard_(liveSheet, historySheet.getDataRange().getValues());
-}
-
-function buildBauSnapshotFromSource_(sourceData) {
-  if (!sourceData || sourceData.length < 1) {
-    throw new Error("BAU source sheet is empty.");
+  if (!spreadsheet) {
+    throw new Error("BAU module must be run from the destination spreadsheet.");
   }
 
-  var header = sourceData[0].map(function(value) {
-    return normalizeText_(value);
-  });
-  var columnMap = buildHeaderColumnMap_(header);
-  var dsColumn = getRequiredColumnIndex_(columnMap, "DS Code");
-  var metricColumns = BAU_METRICS.map(function(metric) {
+  var sheets = prepareBauSheets_(spreadsheet, config);
+  var bauData = fetchBauData_(config, sheets.raw);
+  var historyRows = updateBauHistory_(sheets.history, bauData, config);
+  var mtd = calculateBauMtd_(historyRows, config);
+  var missed = buildBauMissedTracker_(mtd, config);
+  renderBauDashboard_(sheets.live, mtd, missed, config);
+}
+
+function prepareBauSheets_(spreadsheet, config) {
+  function getOrCreateSheet(sheetName) {
+    return spreadsheet.getSheetByName(sheetName) || spreadsheet.insertSheet(sheetName);
+  }
+
+  var live = getOrCreateSheet(config.sheets.live);
+  var history = getOrCreateSheet(config.sheets.history);
+  var raw = getOrCreateSheet(config.sheets.raw);
+
+  raw.hideSheet();
+
+  return {
+    live: live,
+    history: history,
+    raw: raw
+  };
+}
+
+function fetchBauData_(config, rawSheet) {
+  function cleanText(value) {
+    return value === null || value === undefined ? "" : String(value).trim();
+  }
+
+  function compareText(value) {
+    return cleanText(value).toLowerCase().replace(/\s+/g, " ");
+  }
+
+  function formatDate(date) {
+    return Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
+
+  function parseDate(value) {
+    if (value instanceof Date) return formatDate(value);
+    var text = cleanText(value);
+    if (!text) return "";
+    var parsed = new Date(text);
+    return isNaN(parsed.getTime()) ? "" : formatDate(parsed);
+  }
+
+  function parseMetric(value) {
+    if (value === null || value === undefined || value === "") return null;
+    if (typeof value === "number") return value > 0 && value <= 1 ? value * 100 : value;
+    var text = cleanText(value).replace("%", "");
+    var normalized = compareText(text);
+    if (normalized === "yes" || normalized === "met") return 100;
+    if (normalized === "no" || normalized === "missed") return 0;
+    var number = Number(text);
+    return isNaN(number) ? null : number;
+  }
+
+  function round2(value) {
+    return Math.round(value * 100) / 100;
+  }
+
+  function buildColumnMap(header) {
+    var map = {};
+    header.forEach(function(name, index) {
+      map[compareText(name)] = index;
+    });
+    return map;
+  }
+
+  function requiredColumn(columnMap, headerName) {
+    var key = compareText(headerName);
+    if (columnMap[key] === undefined) {
+      throw new Error("Missing required BAU source column: " + headerName);
+    }
+    return columnMap[key];
+  }
+
+  function optionalDateColumn(columnMap) {
+    for (var i = 0; i < config.dateHeaders.length; i++) {
+      var key = compareText(config.dateHeaders[i]);
+      if (columnMap[key] !== undefined) return columnMap[key];
+    }
+    return -1;
+  }
+
+  function writeRaw(rows) {
+    rawSheet.clear();
+    if (rows.length > 0) {
+      rawSheet.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+    }
+    rawSheet.hideSheet();
+  }
+
+  var sourceSheet = SpreadsheetApp.openById(config.sourceId).getSheetByName(config.sourceSheetName);
+  if (!sourceSheet) throw new Error("Missing BAU source sheet: " + config.sourceSheetName);
+
+  var sourceData = sourceSheet.getDataRange().getValues();
+  if (!sourceData || sourceData.length < 1) throw new Error("BAU source sheet is empty.");
+
+  var header = sourceData[0].map(cleanText);
+  var columnMap = buildColumnMap(header);
+  var dsColumn = requiredColumn(columnMap, "DS Code");
+  var dateColumn = optionalDateColumn(columnMap);
+  var metricColumns = config.metrics.map(function(metric) {
     return {
       metric: metric,
-      column: getRequiredColumnIndex_(columnMap, metric)
+      column: requiredColumn(columnMap, metric)
     };
   });
   var matchedRows = [];
 
-  for (var i = 1; i < sourceData.length; i++) {
-    if (normalizeText_(sourceData[i][dsColumn]) === CONFIG.BAU_DS_CODE) {
-      matchedRows.push(sourceData[i]);
+  for (var r = 1; r < sourceData.length; r++) {
+    if (cleanText(sourceData[r][dsColumn]) === config.dsCode) {
+      matchedRows.push(sourceData[r]);
     }
   }
 
-  if (matchedRows.length === 0) {
-    throw new Error("No BAU source row found for DS Code: " + CONFIG.BAU_DS_CODE);
-  }
+  if (matchedRows.length === 0) throw new Error("No BAU source row found for DS Code: " + config.dsCode);
 
-  var snapshotDate = formatDateKey_(new Date());
-  var updatedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
-  var snapshot = [snapshotDate, updatedAt, CONFIG.BAU_DS_CODE];
+  writeRaw([header].concat(matchedRows));
+
+  var sourceDate = "";
+  if (dateColumn >= 0) {
+    for (var d = 0; d < matchedRows.length; d++) {
+      sourceDate = parseDate(matchedRows[d][dateColumn]);
+      if (sourceDate) break;
+    }
+  }
+  if (!sourceDate) sourceDate = formatDate(new Date());
+
+  var snapshot = [
+    sourceDate,
+    Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"),
+    sourceDate,
+    config.dsCode
+  ];
 
   metricColumns.forEach(function(metricColumn) {
-    snapshot.push(calculateBauMetricAverage_(matchedRows, metricColumn.column));
+    var total = 0;
+    var count = 0;
+    matchedRows.forEach(function(row) {
+      var value = parseMetric(row[metricColumn.column]);
+      if (value !== null) {
+        total += value;
+        count++;
+      }
+    });
+    snapshot.push(count > 0 ? round2(total / count) : 0);
   });
 
   return {
-    rawRows: [header].concat(matchedRows),
+    sourceDate: sourceDate,
     snapshot: snapshot
   };
 }
 
-function writeBauRaw_(sheet, rawRows) {
-  sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).breakApart();
-  sheet.clear();
-  ensureSheetSize_(sheet, Math.max(rawRows.length + 2, 5), Math.max(rawRows[0].length + 1, 5));
-  writePaddedRows_(sheet, 1, 1, rawRows);
-  sheet.hideSheet();
-}
-
-function upsertBauHistory_(sheet, snapshot) {
-  var header = ["Snapshot Date", "Updated At", "DS Code"].concat(BAU_METRICS);
-  var lastRow = sheet.getLastRow();
-  var data = lastRow > 0
-    ? sheet.getRange(1, 1, lastRow, Math.max(sheet.getLastColumn(), header.length)).getValues()
-    : [];
-  var snapshotDate = snapshot[0];
-  var targetRow = 0;
-
-  if (data.length === 0 || normalizeText_(data[0][0]) !== "Snapshot Date") {
-    if (data.length > 0) {
-      sheet.insertRowsBefore(1, 1);
-    }
-    sheet.getRange(1, 1, 1, header.length).setValues([header]);
-    data = [header].concat(data);
+function updateBauHistory_(historySheet, bauData, config) {
+  function cleanText(value) {
+    return value === null || value === undefined ? "" : String(value).trim();
   }
 
-  for (var i = 1; i < data.length; i++) {
-    if (normalizeDate_(data[i][0]) === snapshotDate || normalizeText_(data[i][0]) === snapshotDate) {
+  function formatDate(date) {
+    return Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
+
+  function parseDate(value) {
+    if (value instanceof Date) return formatDate(value);
+    var parsed = new Date(cleanText(value));
+    return isNaN(parsed.getTime()) ? cleanText(value) : formatDate(parsed);
+  }
+
+  function readRows(sheet, columns) {
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 1) return [];
+    return sheet.getRange(1, 1, lastRow, Math.max(sheet.getLastColumn(), columns)).getValues();
+  }
+
+  function styleHistory(sheet, lastRow, lastColumn) {
+    if (lastRow < 1 || lastColumn < 1) return;
+    sheet.getRange(1, 1, lastRow, lastColumn)
+      .setFontFamily("Arial")
+      .setFontSize(10)
+      .setHorizontalAlignment("center")
+      .setVerticalAlignment("middle")
+      .setBorder(true, true, true, true, true, true, config.theme.border, SpreadsheetApp.BorderStyle.SOLID);
+    sheet.getRange(1, 1, 1, lastColumn)
+      .setBackground(config.theme.section)
+      .setFontColor(config.theme.primary)
+      .setFontWeight("bold");
+    if (lastRow > 1) {
+      sheet.getRange(2, 1, lastRow - 1, lastColumn)
+        .setBackground(config.theme.card)
+        .setFontColor(config.theme.secondary);
+    }
+    sheet.setFrozenRows(1);
+    sheet.autoResizeColumns(1, Math.min(lastColumn, 16));
+  }
+
+  var header = ["Snapshot Date", "Updated At", "Source Date", "DS Code"].concat(config.metrics);
+  var rows = readRows(historySheet, header.length);
+  var sourceDate = bauData.sourceDate;
+  var targetRow = 0;
+
+  if (rows.length === 0 || cleanText(rows[0][0]) !== "Snapshot Date") {
+    if (rows.length > 0) historySheet.insertRowsBefore(1, 1);
+    historySheet.getRange(1, 1, 1, header.length).setValues([header]);
+    rows = [header].concat(rows);
+  }
+
+  for (var i = 1; i < rows.length; i++) {
+    if (parseDate(rows[i][0]) === sourceDate) {
       targetRow = i + 1;
       break;
     }
   }
 
   if (targetRow > 0) {
-    sheet.getRange(targetRow, 1, 1, header.length).setValues([snapshot]);
+    historySheet.getRange(targetRow, 1, 1, header.length).setValues([bauData.snapshot]);
   } else {
-    sheet.getRange(sheet.getLastRow() + 1, 1, 1, header.length).setValues([snapshot]);
+    historySheet.getRange(historySheet.getLastRow() + 1, 1, 1, header.length).setValues([bauData.snapshot]);
   }
 
-  formatBauHistorySheet_(sheet);
+  styleHistory(historySheet, historySheet.getLastRow(), header.length);
+
+  return readRows(historySheet, header.length);
 }
 
-function renderBauLiveDashboard_(sheet, historyData) {
-  var historyRows = getBauHistoryRows_(historyData);
-  var todayKey = formatDateKey_(new Date());
-  var currentMonthKey = getMonthKey_(todayKey);
-  var todayRow = getLatestBauHistoryRow_(historyRows);
-  var monthRows = historyRows.filter(function(row) {
-    return getMonthKey_(row.dateKey) === currentMonthKey;
-  });
-
-  sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).breakApart();
-  sheet.clear();
-  ensureSheetSize_(sheet, 80, 14);
-  sheet.setHiddenGridlines(true);
-  sheet.setFrozenRows(5);
-  sheet.setTabColor(DASHBOARD_THEME.BACKGROUND);
-  sheet.setColumnWidths(1, 14, 126);
-  sheet.getRange(1, 1, 80, 14)
-    .setBackground(DASHBOARD_THEME.BACKGROUND)
-    .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
-    .setFontFamily("Arial");
-
-  renderBauHeader_(sheet, todayRow, currentMonthKey);
-  renderBauSummaryCards_(sheet, todayRow, monthRows);
-  renderBauMissedTracker_(sheet, todayRow);
-  renderBauMtdAdherence_(sheet, monthRows);
-}
-
-function renderBauHeader_(sheet, todayRow, currentMonthKey) {
-  var refreshedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
-  var latestDate = todayRow ? todayRow.dateKey : "-";
-
-  sheet.getRange("A1:N1")
-    .merge()
-    .setValue("RUHDS48 BAU TRACKING DASHBOARD")
-    .setBackground(DASHBOARD_THEME.NAVY)
-    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
-    .setFontWeight("bold")
-    .setFontSize(24)
-    .setHorizontalAlignment("center")
-    .setVerticalAlignment("middle");
-  sheet.getRange("A2:N2")
-    .merge()
-    .setValue("Target: 100% for every BAU KPI     Current Month: " + currentMonthKey + "     Latest Snapshot: " + latestDate + "     Last Refresh: " + refreshedAt)
-    .setBackground(DASHBOARD_THEME.SECTION)
-    .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
-    .setFontWeight("bold")
-    .setFontSize(13)
-    .setHorizontalAlignment("center")
-    .setVerticalAlignment("middle");
-  sheet.setRowHeights(1, 2, 42);
-}
-
-function renderBauSummaryCards_(sheet, todayRow, monthRows) {
-  var todayAdherence = todayRow ? calculateBauRowAverage_(todayRow) : 0;
-  var monthAdherence = calculateBauMonthAverage_(monthRows);
-  var missedCount = todayRow ? getMissedBauMetrics_(todayRow).length : 0;
-  var cards = [
-    ["Today's Adherence", formatComplaintPercent_(todayAdherence), todayAdherence >= 100 ? "On Target" : "Below Target"],
-    ["Current Month Adherence", formatComplaintPercent_(monthAdherence), monthAdherence >= 100 ? "On Target" : "Below Target"],
-    ["Missed BAU Count", missedCount, missedCount === 0 ? "No Misses" : "Action Required"],
-    ["Historical Snapshots", monthRows.length, "Current Month Records"]
-  ];
-
-  cards.forEach(function(card, index) {
-    var column = 1 + (index * 3);
-    var range = sheet.getRange(4, column, 4, 3);
-    range
-      .setBackground(DASHBOARD_THEME.CARD)
-      .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID_MEDIUM)
-      .setHorizontalAlignment("center")
-      .setVerticalAlignment("middle")
-      .setWrap(true);
-    sheet.getRange(4, column, 1, 3).merge()
-      .setValue(card[0])
-      .setBackground(DASHBOARD_THEME.SECTION)
-      .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
-      .setFontWeight("bold")
-      .setFontSize(11);
-    sheet.getRange(5, column, 2, 3).merge()
-      .setValue(card[1])
-      .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
-      .setFontWeight("bold")
-      .setFontSize(18);
-    sheet.getRange(7, column, 1, 3).merge()
-      .setValue(card[2])
-      .setBackground(card[2] === "Action Required" || card[2] === "Below Target" ? "#4B2E2E" : "#1F3B2D")
-      .setFontColor(card[2] === "Action Required" || card[2] === "Below Target" ? "#FECACA" : "#A7F3D0")
-      .setFontWeight("bold")
-      .setFontSize(11);
-  });
-}
-
-function renderBauMissedTracker_(sheet, todayRow) {
-  renderDashboardSectionTitle_(sheet, 10, 1, 7, "MISSED BAU TRACKER", DASHBOARD_THEME.RED);
-  var rows = [["KPI", "Today", "Target", "Status"]];
-  var missed = todayRow ? getMissedBauMetrics_(todayRow) : [];
-
-  if (missed.length === 0) {
-    rows.push(["All KPIs", "100%", "100%", "On Target"]);
-  } else {
-    missed.forEach(function(metric) {
-      rows.push([metric.metric, formatComplaintPercent_(metric.value), "100%", "Missed"]);
-    });
+function calculateBauMtd_(historyRows, config) {
+  function cleanText(value) {
+    return value === null || value === undefined ? "" : String(value).trim();
   }
 
-  sheet.getRange(12, 1, rows.length, rows[0].length).setValues(rows);
-  formatDashboardTable_(sheet, 12, 1, rows.length, rows[0].length, DASHBOARD_THEME.SECTION);
-
-  for (var i = 1; i < rows.length; i++) {
-    applyComparisonCellStyle_(sheet.getRange(12 + i, 2), rows[i][3] === "Missed" ? "Declined" : "Improved");
+  function formatDate(date) {
+    return Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy-MM-dd");
   }
-}
 
-function renderBauMtdAdherence_(sheet, monthRows) {
-  renderDashboardSectionTitle_(sheet, 10, 8, 7, "MTD ADHERENCE BY KPI", DASHBOARD_THEME.BLUE);
-  var rows = [["KPI", "MTD Adherence", "Target", "Status"]];
-
-  BAU_METRICS.forEach(function(metric) {
-    var avg = calculateBauMetricMonthAverage_(monthRows, metric);
-    rows.push([metric, formatComplaintPercent_(avg), "100%", avg >= 100 ? "On Target" : "Below Target"]);
-  });
-
-  sheet.getRange(12, 8, rows.length, rows[0].length).setValues(rows);
-  formatDashboardTable_(sheet, 12, 8, rows.length, rows[0].length, DASHBOARD_THEME.SECTION);
-
-  for (var i = 1; i < rows.length; i++) {
-    applyComparisonCellStyle_(sheet.getRange(12 + i, 9), rows[i][3] === "On Target" ? "Improved" : "Declined");
+  function parseDate(value) {
+    if (value instanceof Date) return formatDate(value);
+    var parsed = new Date(cleanText(value));
+    return isNaN(parsed.getTime()) ? cleanText(value) : formatDate(parsed);
   }
-}
 
-function getBauHistoryRows_(historyData) {
-  if (!historyData || historyData.length < 2) return [];
+  function monthKey(dateKey) {
+    return dateKey && dateKey.length >= 7 ? dateKey.substring(0, 7) : "";
+  }
 
-  return historyData.slice(1).map(function(row) {
-    var dateKey = normalizeDate_(row[0]);
+  function numberValue(value) {
+    var number = Number(value);
+    return isNaN(number) ? 0 : number;
+  }
+
+  function round2(value) {
+    return Math.round(value * 100) / 100;
+  }
+
+  var currentMonth = monthKey(formatDate(new Date()));
+  var rows = [];
+
+  for (var i = 1; i < historyRows.length; i++) {
+    var dateKey = parseDate(historyRows[i][0]);
+    if (!dateKey || monthKey(dateKey) !== currentMonth) continue;
+
     var metrics = {};
-
-    BAU_METRICS.forEach(function(metric, index) {
-      metrics[metric] = toNumber_(row[index + 3]);
+    config.metrics.forEach(function(metric, index) {
+      metrics[metric] = numberValue(historyRows[i][index + 4]);
     });
 
-    return {
+    rows.push({
       dateKey: dateKey,
-      updatedAt: row[1],
-      dsCode: row[2],
       metrics: metrics
-    };
-  }).filter(function(row) {
-    return row.dateKey;
-  }).sort(function(a, b) {
+    });
+  }
+
+  rows.sort(function(a, b) {
     return a.dateKey.localeCompare(b.dateKey);
   });
-}
 
-function getLatestBauHistoryRow_(historyRows) {
-  return historyRows.length > 0 ? historyRows[historyRows.length - 1] : null;
-}
-
-function calculateBauRowAverage_(row) {
-  if (!row) return 0;
-
-  var total = 0;
-  BAU_METRICS.forEach(function(metric) {
-    total += toNumber_(row.metrics[metric]);
+  var metricRows = config.metrics.map(function(metric) {
+    var achievedDays = 0;
+    rows.forEach(function(row) {
+      if (numberValue(row.metrics[metric]) >= config.target) achievedDays++;
+    });
+    return {
+      metric: metric,
+      achievedDays: achievedDays,
+      totalDays: rows.length,
+      adherence: rows.length > 0 ? round2((achievedDays / rows.length) * 100) : 0
+    };
   });
 
-  return BAU_METRICS.length > 0 ? total / BAU_METRICS.length : 0;
-}
-
-function calculateBauMonthAverage_(monthRows) {
-  if (!monthRows || monthRows.length === 0) return 0;
-
-  var total = 0;
-  monthRows.forEach(function(row) {
-    total += calculateBauRowAverage_(row);
+  var totalKpiDays = rows.length * config.metrics.length;
+  var achievedKpiDays = 0;
+  metricRows.forEach(function(row) {
+    achievedKpiDays += row.achievedDays;
   });
 
-  return total / monthRows.length;
+  var best = metricRows.slice().sort(function(a, b) {
+    return b.adherence - a.adherence || a.metric.localeCompare(b.metric);
+  })[0] || { metric: "-", adherence: 0 };
+  var worst = metricRows.slice().sort(function(a, b) {
+    return a.adherence - b.adherence || a.metric.localeCompare(b.metric);
+  })[0] || { metric: "-", adherence: 0 };
+  var elapsedDay = Number(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "d"));
+
+  return {
+    currentMonth: currentMonth,
+    rows: rows,
+    metricRows: metricRows,
+    mtdAdherence: totalKpiDays > 0 ? round2((achievedKpiDays / totalKpiDays) * 100) : 0,
+    missedCount: totalKpiDays - achievedKpiDays,
+    bestMetric: best.metric + " (" + best.adherence + "%)",
+    worstMetric: worst.metric + " (" + worst.adherence + "%)",
+    completion: elapsedDay > 0 ? round2((rows.length / elapsedDay) * 100) : 0
+  };
 }
 
-function calculateBauMetricMonthAverage_(monthRows, metric) {
-  if (!monthRows || monthRows.length === 0) return 0;
-
-  var total = 0;
-  monthRows.forEach(function(row) {
-    total += toNumber_(row.metrics[metric]);
-  });
-
-  return total / monthRows.length;
-}
-
-function getMissedBauMetrics_(row) {
+function buildBauMissedTracker_(mtd, config) {
   var missed = [];
 
-  BAU_METRICS.forEach(function(metric) {
-    var value = toNumber_(row.metrics[metric]);
-    if (value < 100) {
-      missed.push({
-        metric: metric,
-        value: value
-      });
-    }
+  mtd.rows.forEach(function(row) {
+    config.metrics.forEach(function(metric) {
+      var value = Number(row.metrics[metric]);
+      if (isNaN(value)) value = 0;
+      if (value < config.target) {
+        missed.push([row.dateKey, metric, value, config.target]);
+      }
+    });
   });
 
   return missed;
 }
 
-function calculateBauMetricAverage_(rows, columnIndex) {
-  var total = 0;
-  var count = 0;
+function renderBauDashboard_(liveSheet, mtd, missedRows, config) {
+  function percent(value) {
+    var number = Number(value);
+    if (isNaN(number)) number = 0;
+    return (Math.round(number * 100) / 100).toFixed(2) + "%";
+  }
 
-  rows.forEach(function(row) {
-    var value = parseBauMetricValue_(row[columnIndex]);
-    if (value !== null) {
-      total += value;
-      count++;
+  function statusStyle(value) {
+    return Number(value) >= config.target
+      ? { background: config.theme.successBg, text: config.theme.successText }
+      : { background: config.theme.declineBg, text: config.theme.declineText };
+  }
+
+  function section(row, column, columns, title, color) {
+    liveSheet.getRange(row, column, 1, columns)
+      .setBackground(color)
+      .setFontColor(config.theme.primary)
+      .setFontWeight("bold")
+      .setFontSize(15)
+      .setHorizontalAlignment("center")
+      .setVerticalAlignment("middle");
+    liveSheet.getRange(row, column).setValue(title);
+    liveSheet.setRowHeight(row, 38);
+  }
+
+  function table(row, column, values, headerColor) {
+    if (!values || values.length === 0) return;
+    liveSheet.getRange(row, column, values.length, values[0].length).setValues(values);
+    var backgrounds = [];
+    for (var r = 0; r < values.length; r++) {
+      var rowBackgrounds = [];
+      for (var c = 0; c < values[0].length; c++) {
+        rowBackgrounds.push(r === 0 ? headerColor : (r % 2 === 0 ? "#1E293B" : config.theme.card));
+      }
+      backgrounds.push(rowBackgrounds);
     }
-  });
-
-  return count > 0 ? round2_(total / count) : 0;
-}
-
-function parseBauMetricValue_(value) {
-  if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number") return value > 0 && value <= 1 ? value * 100 : value;
-
-  var text = normalizeText_(value).replace("%", "");
-  if (normalizeForCompare_(text) === "yes" || normalizeForCompare_(text) === "met") return 100;
-  if (normalizeForCompare_(text) === "no" || normalizeForCompare_(text) === "missed") return 0;
-
-  var number = Number(text);
-  return isNaN(number) ? null : number;
-}
-
-function buildHeaderColumnMap_(header) {
-  var map = {};
-
-  header.forEach(function(name, index) {
-    map[normalizeForCompare_(name)] = index;
-  });
-
-  return map;
-}
-
-function getRequiredColumnIndex_(columnMap, headerName) {
-  var key = normalizeForCompare_(headerName);
-  if (columnMap[key] === undefined) {
-    throw new Error("Missing required BAU source column: " + headerName);
+    liveSheet.getRange(row, column, values.length, values[0].length)
+      .setBackgrounds(backgrounds)
+      .setFontColor(config.theme.secondary)
+      .setFontFamily("Arial")
+      .setFontSize(10)
+      .setHorizontalAlignment("center")
+      .setVerticalAlignment("middle")
+      .setWrap(true)
+      .setBorder(true, true, true, true, true, true, config.theme.border, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+    liveSheet.getRange(row, column, 1, values[0].length)
+      .setFontColor(config.theme.primary)
+      .setFontWeight("bold")
+      .setFontSize(11);
   }
 
-  return columnMap[key];
-}
+  liveSheet.clear();
+  liveSheet.setHiddenGridlines(true);
+  liveSheet.setFrozenRows(5);
+  liveSheet.setTabColor(config.theme.background);
+  liveSheet.setColumnWidths(1, 14, 126);
+  liveSheet.getRange(1, 1, 100, 14)
+    .setBackground(config.theme.background)
+    .setFontColor(config.theme.secondary)
+    .setFontFamily("Arial");
 
-function formatBauHistorySheet_(sheet) {
-  var lastRow = sheet.getLastRow();
-  var lastColumn = sheet.getLastColumn();
-  if (lastRow < 1 || lastColumn < 1) return;
-
-  sheet.getRange(1, 1, lastRow, lastColumn)
-    .setFontFamily("Arial")
-    .setFontSize(10)
+  liveSheet.getRange(1, 1, 1, 14)
+    .setBackground(config.theme.navy)
+    .setFontColor(config.theme.primary)
+    .setFontWeight("bold")
+    .setFontSize(24)
     .setHorizontalAlignment("center")
-    .setVerticalAlignment("middle")
-    .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID);
-  sheet.getRange(1, 1, 1, lastColumn)
-    .setBackground(DASHBOARD_THEME.SECTION)
-    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
-    .setFontWeight("bold");
-  if (lastRow > 1) {
-    sheet.getRange(2, 1, lastRow - 1, lastColumn)
-      .setBackground(DASHBOARD_THEME.CARD)
-      .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT);
+    .setVerticalAlignment("middle");
+  liveSheet.getRange(1, 1).setValue("RUHDS48 BAU TRACKING DASHBOARD");
+  liveSheet.getRange(2, 1, 1, 14)
+    .setBackground(config.theme.section)
+    .setFontColor(config.theme.secondary)
+    .setFontWeight("bold")
+    .setFontSize(13)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+  liveSheet.getRange(2, 1).setValue("Standalone BAU Module     Current Month: " + mtd.currentMonth + "     Target: 100% for every KPI");
+  liveSheet.setRowHeights(1, 2, 42);
+
+  var cards = [
+    ["Month To Date Adherence %", percent(mtd.mtdAdherence), mtd.mtdAdherence >= config.target ? "On Target" : "Below Target"],
+    ["Total Missed BAUs", mtd.missedCount, mtd.missedCount === 0 ? "No Misses" : "Action Required"],
+    ["Best Performing KPI", mtd.bestMetric, "Highest MTD Adherence"],
+    ["Worst Performing KPI", mtd.worstMetric, "Lowest MTD Adherence"],
+    ["Current Month Completion %", percent(mtd.completion), "Recorded Days / Elapsed Days"]
+  ];
+
+  cards.forEach(function(card, index) {
+    var column = 1 + (index * 2);
+    var width = index === 4 ? 6 : 2;
+    liveSheet.getRange(4, column, 4, width)
+      .setBackground(config.theme.card)
+      .setBorder(true, true, true, true, true, true, config.theme.border, SpreadsheetApp.BorderStyle.SOLID_MEDIUM)
+      .setHorizontalAlignment("center")
+      .setVerticalAlignment("middle")
+      .setWrap(true);
+    liveSheet.getRange(4, column, 1, width)
+      .setBackground(config.theme.section)
+      .setFontColor(config.theme.primary)
+      .setFontWeight("bold")
+      .setFontSize(11);
+    liveSheet.getRange(4, column).setValue(card[0]);
+    liveSheet.getRange(5, column, 2, width)
+      .setFontColor(config.theme.primary)
+      .setFontWeight("bold")
+      .setFontSize(16);
+    liveSheet.getRange(5, column).setValue(card[1]);
+    var style = card[2] === "Action Required" || card[2] === "Below Target"
+      ? { background: config.theme.declineBg, text: config.theme.declineText }
+      : { background: config.theme.successBg, text: config.theme.successText };
+    liveSheet.getRange(7, column, 1, width)
+      .setBackground(style.background)
+      .setFontColor(style.text)
+      .setFontWeight("bold")
+      .setFontSize(10);
+    liveSheet.getRange(7, column).setValue(card[2]);
+  });
+
+  section(10, 1, 7, "MISSED BAU TRACKER", config.theme.section);
+  table(12, 1, [["Date", "KPI", "Actual Value", "Target Value"]].concat(missedRows.map(function(row) {
+    return [row[0], row[1], percent(row[2]), percent(row[3])];
+  })), config.theme.section);
+
+  section(10, 8, 7, "MTD ADHERENCE BY KPI", config.theme.section);
+  table(12, 8, [["KPI", "Achieved Days", "Recorded Days", "Adherence %"]].concat(mtd.metricRows.map(function(row) {
+    return [row.metric, row.achievedDays, row.totalDays, percent(row.adherence)];
+  })), config.theme.section);
+
+  var dailyRows = [["Date", "Daily Adherence %", "Missed Count", "Status"]];
+  mtd.rows.forEach(function(row) {
+    var achieved = 0;
+    config.metrics.forEach(function(metric) {
+      if (Number(row.metrics[metric]) >= config.target) achieved++;
+    });
+    var dailyAdherence = config.metrics.length > 0 ? (achieved / config.metrics.length) * 100 : 0;
+    dailyRows.push([row.dateKey, percent(dailyAdherence), config.metrics.length - achieved, dailyAdherence >= config.target ? "On Target" : "Below Target"]);
+  });
+
+  section(32, 1, 14, "DAILY ADHERENCE TABLE", config.theme.section);
+  table(34, 1, dailyRows, config.theme.section);
+
+  for (var i = 1; i < dailyRows.length; i++) {
+    var style = statusStyle(parseFloat(String(dailyRows[i][1]).replace("%", "")));
+    liveSheet.getRange(34 + i, 2)
+      .setBackground(style.background)
+      .setFontColor(style.text)
+      .setFontWeight("bold");
   }
-  sheet.setFrozenRows(1);
-  sheet.autoResizeColumns(1, Math.min(lastColumn, 15));
 }
 
 function updateDarkStoreDashboard() {
