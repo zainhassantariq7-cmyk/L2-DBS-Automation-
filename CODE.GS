@@ -21,7 +21,12 @@ var CONFIG = {
     COMPLAINT_ANALYSIS: "COMPLAINT_ANALYSIS",
     RCA_DATABASE: "YEARLY_RCA_DATABASE",
     WEEKLY_ANALYTICS: "Weekly Analytics",
-    DARK_STORE_GRAPHS: "Dark Store Graphs"
+    DARK_STORE_GRAPHS: "Dark Store Graphs",
+    DARK_STORE_DATA: "DARK_STORE_DATA",
+    POC_MAPPING: "POC_MAPPING",
+    POC_MANUAL_INPUT: "POC_MANUAL_INPUT",
+    POC_SCORECARD: "POC_SCORECARD",
+    SHIFT_ROSTER: "SHIFT_ROSTER"
   },
 
   PROPERTIES: {
@@ -43,21 +48,124 @@ var CONFIG = {
   }
 };
 
-var GRAPH_LAYOUT = {
-  ORDER_BAR_ROW: 4,
-  ITEM_BAR_ROW: 40,
-  ORDER_SOURCE_ROW: 130,
-  ITEM_SOURCE_ROW: 170,
-  PERFORMANCE_SOURCE_ROW: 210,
-  DAILY_KPI_SOURCE_ROW: 250,
-  TOP_PICKER_SOURCE_ROW: 280,
-  CHART_COLUMN: 9,
-  ORDER_CHART_ROW: 4,
-  ITEM_CHART_ROW: 40,
-  PERFORMANCE_CHART_ROW: 76,
-  DAILY_KPI_CHART_ROW: 112,
-  TOP_PICKER_CHART_ROW: 148
+var POC_NAMES = ["Kamal", "Minhaj", "Tawhid"];
+
+var POC_NAME_ALIASES = {
+  "kamal": "Kamal",
+  "mohammed kamal ahmed": "Kamal",
+  "minhaj": "Minhaj",
+  "minah abeddin": "Minhaj",
+  "md tawhid": "Tawhid",
+  "tawhid": "Tawhid"
 };
+
+var DEFAULT_POC_MAPPINGS = [
+  ["Md Kamal Ahmed", "Md Kamal Ahmed", "Kamal", "Kamal Team", true],
+  ["Mohammed Kamal Ahmed", "Md Kamal Ahmed", "Kamal", "Kamal Team", true],
+  ["MD Rakib Hossan", "MD Rakib Hossan", "Kamal", "Kamal Team", true],
+  ["MD RAKIB HOSSAN", "MD Rakib Hossan", "Kamal", "Kamal Team", true],
+  ["Rakib Hassan", "MD Rakib Hossan", "Kamal", "Kamal Team", true],
+  ["MD Sobuj", "MD Sobuj", "Kamal", "Kamal Team", true],
+  ["MD Anik", "MD Anik", "Kamal", "Kamal Team", true],
+  ["Md Obaydur Rahman Anik", "MD Anik", "Kamal", "Kamal Team", true],
+  ["Md.Minhaz Abedin", "Md.Minhaz Abedin", "Minhaj", "Minhaj Team", true],
+  ["Minah Abeddin", "Md.Minhaz Abedin", "Minhaj", "Minhaj Team", true],
+  ["Emamul Hok", "Emamul Hok", "Minhaj", "Minhaj Team", true],
+  ["Tushar Imran", "Emamul Hok", "Minhaj", "Minhaj Team", true],
+  ["Md Shimul", "Md Shimul", "Minhaj", "Minhaj Team", true],
+  ["Sunbim Sarid Moon", "Sunbim Sarid Moon", "Minhaj", "Minhaj Team", true],
+  ["Sunbim Sarit", "Sunbim Sarid Moon", "Minhaj", "Minhaj Team", true],
+  ["Yusuf Chowdhury", "Sunbim Sarid Moon", "Minhaj", "Minhaj Team", true],
+  ["Md Apon Ahmed", "Md Apon Ahmed", "Minhaj", "Minhaj Team", true],
+  ["Mohammad Tutul", "Md Apon Ahmed", "Minhaj", "Minhaj Team", true],
+  ["Md Tawhid", "Md Tawhid", "Tawhid", "Tawhid Team", true],
+  ["Jabbarul Islam", "Jabbarul Islam", "Tawhid", "Tawhid Team", true],
+  ["Zain Hassan", "Jabbarul Islam", "Tawhid", "Tawhid Team", true],
+  ["Saikat Sohhain Bhuiyan", "Saikat Sohhain Bhuiyan", "Tawhid", "Tawhid Team", true],
+  ["SAIKAT SOHHAIN", "Saikat Sohhain Bhuiyan", "Tawhid", "Tawhid Team", true],
+  ["Md Saidur", "Saikat Sohhain Bhuiyan", "Tawhid", "Tawhid Team", true],
+  ["Asik Mia", "Saikat Sohhain Bhuiyan", "Tawhid", "Tawhid Team", true]
+];
+
+var POC_SCORE_WEIGHTS = {
+  OPERATIONS: 0.30,
+  COMPLAINT: 0.25,
+  BAU: 0.20,
+  INVENTORY: 0.15,
+  COMPLIANCE: 0.10
+};
+
+var POC_BAU_OWNERSHIP = {
+  "Offload AM": { Tawhid: 0.75, Minhaj: 0.25 },
+  "Offload CHL": { Tawhid: 0.75, Minhaj: 0.25 },
+  "Offload FZR": { Tawhid: 0.75, Minhaj: 0.25 },
+  "Offload UF": { Tawhid: 0.75, Minhaj: 0.25 },
+  "Putaway AM": { Tawhid: 0.75, Minhaj: 0.25 },
+  "Putaway CHL": { Tawhid: 0.75, Minhaj: 0.25 },
+  "Putaway FZR": { Tawhid: 0.75, Minhaj: 0.25 },
+  "Putaway UF": { Tawhid: 0.75, Minhaj: 0.25 },
+  "FSQ": { Kamal: 0.5, Minhaj: 0.5 },
+  "Expiry Adherence": { Tawhid: 1 },
+  "Chiller Movement": { Kamal: 0.5, Minhaj: 0.5 },
+  "Cycle Count": { Kamal: 0.5, Tawhid: 0.5 }
+};
+
+var POC_COMPLIANCE_OWNERSHIP = {
+  "Hygiene Form Updated": { Kamal: 1, Minhaj: 1, Tawhid: 1 },
+  "RTV Handover": { Kamal: 1 },
+  "Warehouse Handover": { Minhaj: 1 },
+  "Vendor Receiving": { Kamal: 1 },
+  "Warehouse Receiving": { Minhaj: 1, Tawhid: 1 }
+};
+
+var GRAPH_LAYOUT = {
+  DASHBOARD_MIN_ROWS: 130,
+  DASHBOARD_MIN_COLUMNS: 14,
+  DATA_MIN_ROWS: 220,
+  DATA_MIN_COLUMNS: 12,
+  ORDER_SOURCE_ROW: 1,
+  ITEM_SOURCE_ROW: 35,
+  PERFORMANCE_SOURCE_ROW: 70,
+  DAILY_KPI_SOURCE_ROW: 105,
+  TOP_PICKER_SOURCE_ROW: 125,
+  PRODUCTIVITY_SOURCE_ROW: 145,
+  PEAK_HOUR_SOURCE_ROW: 160,
+  HEATMAP_SOURCE_ROW: 175,
+  SUMMARY_ROW: 8,
+  PRODUCTIVITY_ROW: 15,
+  ORDERS_TABLE_ROW: 24,
+  ITEMS_TABLE_ROW: 24,
+  SPEED_TABLE_ROW: 53,
+  VARIANCE_ROW: 82,
+  SLA_ROW: 82,
+  PEAK_HOUR_ROW: 96,
+  PICKER_ROW: 105
+};
+
+const DASHBOARD_THEME = {
+  BACKGROUND: "#0B1320",
+  CARD: "#172033",
+  SECTION: "#22304A",
+  BORDER: "#344055",
+  PRIMARY_TEXT: "#FFFFFF",
+  SECONDARY_TEXT: "#CBD5E1",
+  MUTED_TEXT: "#94A3B8",
+  SUCCESS: "#A7F3D0",
+  WARNING: "#D4A017",
+  CRITICAL: "#FECACA",
+  INFO: "#7C9BCF",
+  NAVY: "#111827",
+  BLUE: "#7C9BCF",
+  CYAN: "#93C5FD",
+  GREEN: "#355E4A",
+  RED: "#6B3A3A",
+  ORANGE: "#D4A017",
+  PURPLE: "#D4A017",
+  LIGHT: "#172033",
+  WHITE: "#FFFFFF"
+};
+
+var COMPLAINT_RATE_START_DATE = "2026-05-22";
 
 var MTD_COMPLAINT_SCORING = {
   SAFE_MAX_PERCENT: 0.4,
@@ -142,6 +250,7 @@ function updateRawDatabase() {
 
   var destSheet = getRequiredSheet_(destSS, CONFIG.SHEETS.RDB);
   var rcaSheet = getRequiredSheet_(rcaSS, CONFIG.SHEETS.RCA_DATABASE);
+  var pocMapping = getPocMapping_(ensurePocMappingSheet_(destSS));
 
   var existingManualInputs = readExistingRdbManualInputs_(destSheet);
   var existingManualRows = readExistingRdbManualRows_(destSheet);
@@ -152,7 +261,7 @@ function updateRawDatabase() {
     [
       "Date",
       "Picker Name",
-      "",
+      "POC",
       "Order Count",
       "Item Count",
       "AT",
@@ -181,7 +290,7 @@ function updateRawDatabase() {
     dataRows.push([
       row.dateKey,
       row.picker,
-      "",
+      getPocForPicker_(row.picker, pocMapping),
       orderCount,
       row.itemCount,
       orderCount > 0 ? row.totalAcceptance / orderCount : 0,
@@ -196,6 +305,7 @@ function updateRawDatabase() {
 
   existingManualRows.forEach(function(manualRow) {
     if (!summary[manualRow.key]) {
+      manualRow.row[2] = getPocForPicker_(manualRow.row[1], pocMapping);
       dataRows.push(manualRow.row);
     }
   });
@@ -211,13 +321,13 @@ function updateRawDatabase() {
 
   clearSheetContents_(destSheet, 1, 1, Math.max(destSheet.getLastRow(), 1), 12);
   destSheet.getRange(1, 1, output.length, output[0].length).setValues(output);
+  writePocMappingValidation_(ensurePocMappingSheet_(destSS), dataRows, pocMapping);
 }
 
 function updateRdbHourly() {
   var sourceSS = SpreadsheetApp.openById(CONFIG.SOURCE_ID);
   var destSS = SpreadsheetApp.openById(CONFIG.DEST_ID);
   var hourlySheet = getOrCreateSheet_(destSS, CONFIG.SHEETS.RDB_HOURLY);
-  var manualMp = readExistingHourlyManualMp_(hourlySheet);
   var summary = buildHourlySummary_(sourceSS);
   var output = [
     [
@@ -230,7 +340,10 @@ function updateRdbHourly() {
       "PT",
       "PKT",
       "P95",
-      "MP"
+      "MP Count",
+      "Kamal Team Count",
+      "Minhaj Team Count",
+      "Tawhid Team Count"
     ]
   ];
   var dateKeys = Object.keys(summary).sort();
@@ -239,25 +352,13 @@ function updateRdbHourly() {
 
   dateKeys.forEach(function(dateKey) {
     var dateTotals = createHourlyBucket_();
-    var mpTotal = 0;
-    var mpCount = 0;
     var hourlyStartRow = output.length + 1;
 
     for (var hour = 0; hour < 24; hour++) {
       var bucket = summary[dateKey][hour];
       var orderCount = Object.keys(bucket.orders).length;
-      var manualValue = manualMp[makeHourlyKey_(dateKey, hour)];
 
       addBucketToTotal_(dateTotals, bucket);
-
-      if (manualValue !== "" && manualValue !== undefined) {
-        var mpNumber = Number(manualValue);
-
-        if (!isNaN(mpNumber)) {
-          mpTotal += mpNumber;
-          mpCount++;
-        }
-      }
 
       output.push([
         dateKey,
@@ -269,7 +370,10 @@ function updateRdbHourly() {
         bucket.itemCount > 0 ? bucket.totalPicking / bucket.itemCount : 0,
         bucket.itemCount > 0 ? bucket.totalPacking / bucket.itemCount : 0,
         orderCount > 0 ? (bucket.totalFulfillment / orderCount) / 60 : 0,
-        manualValue === undefined ? "" : manualValue
+        0,
+        0,
+        0,
+        0
       ]);
     }
 
@@ -291,12 +395,17 @@ function updateRdbHourly() {
       dateTotals.itemCount > 0 ? dateTotals.totalPicking / dateTotals.itemCount : 0,
       dateTotals.itemCount > 0 ? dateTotals.totalPacking / dateTotals.itemCount : 0,
       totalOrderCount > 0 ? (dateTotals.totalFulfillment / totalOrderCount) / 60 : 0,
-      mpCount > 0 ? mpTotal / mpCount : ""
+      0,
+      0,
+      0,
+      0
     ]);
   });
 
-  clearSheetContents_(hourlySheet, 1, 1, Math.max(hourlySheet.getLastRow(), 1), Math.max(hourlySheet.getLastColumn(), 10));
+  clearSheetContents_(hourlySheet, 1, 1, Math.max(hourlySheet.getLastRow(), 1), Math.max(hourlySheet.getLastColumn(), 13));
   writePaddedRows_(hourlySheet, 1, 1, output);
+  updateHourlyManpowerCount_(hourlySheet, destSS);
+  output = hourlySheet.getRange(1, 1, hourlySheet.getLastRow(), 13).getValues();
   formatRdbHourlySheet_(hourlySheet, output, totalRows, hourlyBlocks);
 }
 
@@ -437,6 +546,611 @@ function updateMTDDashboard() {
 
   clearSheetContents_(mtdSheet, 1, 1, Math.max(mtdSheet.getLastRow(), 1), 18);
   mtdSheet.getRange(1, 1, output.length, output[0].length).setValues(output);
+  updatePocPerformanceSystem_(ss, mtdSheet, rows, mtdMonthKey);
+}
+
+function updatePocPerformanceSystem_(spreadsheet, mtdSheet, pickerRows, monthKey) {
+  var mappingSheet = ensurePocMappingSheet_(spreadsheet);
+  var manualSheet = ensurePocManualInputSheet_(spreadsheet);
+  var scorecardSheet = getOrCreateSheet_(spreadsheet, CONFIG.SHEETS.POC_SCORECARD);
+  var pocMapping = getPocMapping_(mappingSheet);
+  var manualSummary = getPocManualSummary_(manualSheet, monthKey);
+  var bauSummary = getPocBauSummary_(spreadsheet, monthKey);
+  var pocRows = buildPocPerformanceRows_(pickerRows, pocMapping, manualSummary, bauSummary);
+
+  renderPocPerformanceDashboard_(mtdSheet, pocRows);
+  renderPocScorecard_(scorecardSheet, pocRows, monthKey);
+}
+
+function ensurePocMappingSheet_(spreadsheet) {
+  var sheet = getOrCreateSheet_(spreadsheet, CONFIG.SHEETS.POC_MAPPING);
+  var header = ["Employee Name", "Canonical Name", "POC", "Team", "Active"];
+
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+    sheet.getRange(2, 1, DEFAULT_POC_MAPPINGS.length, header.length).setValues(DEFAULT_POC_MAPPINGS);
+  } else if (normalizeText_(sheet.getRange(1, 1).getValue()) !== "Employee Name") {
+    upgradePocMappingSheet_(sheet);
+  } else if (sheet.getLastRow() < 2) {
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+    sheet.getRange(2, 1, DEFAULT_POC_MAPPINGS.length, header.length).setValues(DEFAULT_POC_MAPPINGS);
+  }
+
+  appendMissingDefaultPocMappings_(sheet);
+  sheet.hideSheet();
+  return sheet;
+}
+
+function upgradePocMappingSheet_(sheet) {
+  var oldValues = sheet.getDataRange().getValues();
+  var header = ["Employee Name", "Canonical Name", "POC", "Team", "Active"];
+  var upgradedRows = [header];
+
+  for (var i = 1; i < oldValues.length; i++) {
+    var employee = normalizeText_(oldValues[i][0]);
+    var poc = normalizePocName_(oldValues[i][1]);
+    var team = normalizeText_(oldValues[i][2]);
+    var active = oldValues[i][3] === true || normalizeForCompare_(oldValues[i][3]) === "true" || normalizeText_(oldValues[i][3]) === "1";
+
+    if (employee) {
+      upgradedRows.push([employee, getCanonicalEmployeeName_(employee), poc, team, active]);
+    }
+  }
+
+  sheet.clear();
+  sheet.getRange(1, 1, upgradedRows.length, header.length).setValues(upgradedRows);
+}
+
+function appendMissingDefaultPocMappings_(sheet) {
+  var data = sheet.getDataRange().getValues();
+  var existing = {};
+  var rowsToAppend = [];
+
+  for (var i = 1; i < data.length; i++) {
+    existing[normalizeEmployeeNameForMatch_(data[i][0])] = true;
+  }
+
+  DEFAULT_POC_MAPPINGS.forEach(function(row) {
+    var key = normalizeEmployeeNameForMatch_(row[0]);
+    if (!existing[key]) {
+      rowsToAppend.push(row);
+    }
+  });
+
+  if (rowsToAppend.length > 0) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
+  }
+}
+
+function ensurePocManualInputSheet_(spreadsheet) {
+  var sheet = getOrCreateSheet_(spreadsheet, CONFIG.SHEETS.POC_MANUAL_INPUT);
+  var header = [
+    "Date",
+    "POC",
+    "Hygiene Form Updated",
+    "RTV Handover",
+    "Warehouse Handover",
+    "Vendor Receiving",
+    "Warehouse Receiving",
+    "Variance Qty",
+    "Variance SAR",
+    "Adjusted",
+    "Remarks"
+  ];
+
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+  } else if (normalizeText_(sheet.getRange(1, 1).getValue()) !== "Date") {
+    sheet.insertRowsBefore(1, 1);
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+  }
+
+  formatPocInputSheet_(sheet, header.length);
+  return sheet;
+}
+
+function getPocMapping_(sheet) {
+  var mapping = {};
+  var data = sheet.getDataRange().getValues();
+
+  for (var i = 1; i < data.length; i++) {
+    var employee = normalizeText_(data[i][0]);
+    var canonical = normalizeText_(data[i][1]) || getCanonicalEmployeeName_(employee);
+    var poc = normalizePocName_(data[i][2]);
+    var active = data[i][4] === true || normalizeForCompare_(data[i][4]) === "true" || normalizeText_(data[i][4]) === "1";
+
+    if (employee && poc && active) {
+      mapping[normalizeEmployeeNameForMatch_(employee)] = {
+        canonical: canonical,
+        poc: poc
+      };
+    }
+  }
+
+  return mapping;
+}
+
+function getPocForPicker_(picker, mapping) {
+  var mapped = mapping[normalizeEmployeeNameForMatch_(picker)];
+  return mapped ? normalizePocName_(mapped.poc) : "Unassigned";
+}
+
+function getCanonicalEmployeeForPicker_(picker, mapping) {
+  var mapped = mapping[normalizeEmployeeNameForMatch_(picker)];
+  return mapped ? mapped.canonical : "";
+}
+
+function normalizeEmployeeNameForMatch_(name) {
+  return normalizeForCompare_(String(name || "").replace(/[.\-_/]+/g, " "));
+}
+
+function getCanonicalEmployeeName_(employee) {
+  var key = normalizeEmployeeNameForMatch_(employee);
+
+  for (var i = 0; i < DEFAULT_POC_MAPPINGS.length; i++) {
+    if (normalizeEmployeeNameForMatch_(DEFAULT_POC_MAPPINGS[i][0]) === key) {
+      return DEFAULT_POC_MAPPINGS[i][1];
+    }
+  }
+
+  return normalizeText_(employee);
+}
+
+function writePocMappingValidation_(sheet, rdbRows, mapping) {
+  var pickerLookup = {};
+  var validationRows = [["Employee Name", "Canonical Name", "POC"]];
+  var unmatchedRows = [["Unmatched Employee Name"]];
+
+  rdbRows.forEach(function(row) {
+    var picker = normalizeText_(row[1]);
+    if (picker) pickerLookup[picker] = true;
+  });
+
+  Object.keys(pickerLookup).sort().forEach(function(picker) {
+    var poc = getPocForPicker_(picker, mapping);
+    var canonical = getCanonicalEmployeeForPicker_(picker, mapping);
+
+    if (poc === "Unassigned") {
+      unmatchedRows.push([picker]);
+    } else {
+      validationRows.push([picker, canonical, poc]);
+    }
+  });
+
+  var startColumn = 7;
+  var maxRows = Math.max(sheet.getMaxRows(), validationRows.length + unmatchedRows.length + 5);
+  sheet.getRange(1, startColumn, maxRows, 5).clearContent();
+  sheet.getRange(1, startColumn).setValue("POC_MAPPING VALIDATION");
+  sheet.getRange(2, startColumn, validationRows.length, validationRows[0].length).setValues(validationRows);
+  sheet.getRange(validationRows.length + 4, startColumn).setValue("UNMATCHED EMPLOYEES");
+  sheet.getRange(validationRows.length + 5, startColumn, unmatchedRows.length, unmatchedRows[0].length).setValues(unmatchedRows);
+}
+
+function normalizePocName_(poc) {
+  var name = normalizeText_(poc);
+  var alias = POC_NAME_ALIASES[normalizeForCompare_(name)];
+  return alias || name;
+}
+
+function buildPocPerformanceRows_(pickerRows, pocMapping, manualSummary, bauSummary) {
+  var summaries = {};
+  var totalOrders = 0;
+  var totalItems = 0;
+
+  POC_NAMES.forEach(function(poc) {
+    summaries[poc] = createPocSummary_(poc);
+  });
+
+  pickerRows.forEach(function(row) {
+    var picker = normalizeText_(row[0]);
+    var poc = getPocForPicker_(picker, pocMapping);
+    if (!summaries[poc]) return;
+
+    var summary = summaries[poc];
+    var orders = toNumber_(row[1]);
+    var items = toNumber_(row[2]);
+    var complaints = toNumber_(row[3]);
+    var avgAT = toNumber_(row[8]);
+    var avgPT = toNumber_(row[9]);
+    var avgPKT = toNumber_(row[10]);
+    var avgP95 = toNumber_(row[11]);
+    var bagDeviation = toNumber_(row[12]);
+    var merchandising = toNumber_(row[14]);
+    var mtdScore = toNumber_(row[16]);
+
+    totalOrders += orders;
+    totalItems += items;
+    summary.orders += orders;
+    summary.items += items;
+    summary.complaints += complaints;
+    summary.atWeighted += avgAT * orders;
+    summary.ptWeighted += avgPT * items;
+    summary.pktWeighted += avgPKT * items;
+    summary.p95Weighted += avgP95 * orders;
+    summary.bagDeviationTotal += bagDeviation;
+    summary.merchandisingTotal += merchandising;
+    summary.operationsScoreWeighted += mtdScore * Math.max(orders, 1);
+    summary.operationsWeight += Math.max(orders, 1);
+    summary.pickerCount++;
+  });
+
+  var rows = POC_NAMES.map(function(poc) {
+    var summary = summaries[poc];
+    var manual = manualSummary[poc] || createPocManualSummary_();
+    var bauScore = bauSummary[poc] || 0;
+    var complaintPercent = summary.orders > 0 ? (summary.complaints / summary.orders) * 100 : 0;
+    var operationsScore = summary.operationsWeight > 0 ? summary.operationsScoreWeighted / summary.operationsWeight : 0;
+    var complaintScore = calculatePocComplaintScore_(complaintPercent);
+    var finalScore = calculatePocFinalScore_(
+      operationsScore,
+      complaintScore,
+      bauScore,
+      manual.inventoryScore,
+      manual.complianceScore
+    );
+
+    return {
+      poc: poc,
+      orders: summary.orders,
+      items: summary.items,
+      ordersContribution: totalOrders > 0 ? (summary.orders / totalOrders) * 100 : 0,
+      itemsContribution: totalItems > 0 ? (summary.items / totalItems) * 100 : 0,
+      itemsPerOrder: summary.orders > 0 ? summary.items / summary.orders : 0,
+      avgAT: summary.orders > 0 ? summary.atWeighted / summary.orders : 0,
+      avgPT: summary.items > 0 ? summary.ptWeighted / summary.items : 0,
+      avgPKT: summary.items > 0 ? summary.pktWeighted / summary.items : 0,
+      avgP95: summary.orders > 0 ? summary.p95Weighted / summary.orders : 0,
+      complaints: summary.complaints,
+      complaintPercent: complaintPercent,
+      avgBagDeviation: summary.pickerCount > 0 ? summary.bagDeviationTotal / summary.pickerCount : 0,
+      merchandising: summary.pickerCount > 0 ? summary.merchandisingTotal / summary.pickerCount : 0,
+      bauScore: bauScore,
+      operationsScore: operationsScore,
+      complaintScore: complaintScore,
+      inventoryScore: manual.inventoryScore,
+      complianceScore: manual.complianceScore,
+      openVarianceQty: manual.openVarianceQty,
+      openVarianceSar: manual.openVarianceSar,
+      finalScore: finalScore
+    };
+  }).sort(function(a, b) {
+    return b.finalScore - a.finalScore || a.poc.localeCompare(b.poc);
+  });
+
+  rows.forEach(function(row, index) {
+    row.rank = index + 1;
+  });
+
+  return rows;
+}
+
+function createPocSummary_(poc) {
+  return {
+    poc: poc,
+    orders: 0,
+    items: 0,
+    complaints: 0,
+    atWeighted: 0,
+    ptWeighted: 0,
+    pktWeighted: 0,
+    p95Weighted: 0,
+    bagDeviationTotal: 0,
+    merchandisingTotal: 0,
+    operationsScoreWeighted: 0,
+    operationsWeight: 0,
+    pickerCount: 0
+  };
+}
+
+function getPocBauSummary_(spreadsheet, monthKey) {
+  var sheet = spreadsheet.getSheetByName("BAU_HISTORY");
+  var result = {};
+  POC_NAMES.forEach(function(poc) {
+    result[poc] = 0;
+  });
+
+  if (!sheet || sheet.getLastRow() < 2) return result;
+
+  var data = sheet.getDataRange().getValues();
+  var header = data[0];
+  var metricColumns = {};
+  header.forEach(function(name, index) {
+    metricColumns[normalizeText_(name)] = index;
+  });
+  var metricTotals = {};
+  var metricCounts = {};
+
+  for (var i = 1; i < data.length; i++) {
+    var dateKey = normalizeDate_(data[i][0]);
+    if (getMonthKey_(dateKey) !== monthKey) continue;
+
+    Object.keys(POC_BAU_OWNERSHIP).forEach(function(metric) {
+      var column = metricColumns[metric];
+      if (column === undefined) return;
+      metricTotals[metric] = (metricTotals[metric] || 0) + toNumber_(data[i][column]);
+      metricCounts[metric] = (metricCounts[metric] || 0) + 1;
+    });
+  }
+
+  POC_NAMES.forEach(function(poc) {
+    var weightedTotal = 0;
+    var weight = 0;
+    Object.keys(POC_BAU_OWNERSHIP).forEach(function(metric) {
+      var ownership = POC_BAU_OWNERSHIP[metric][poc] || 0;
+      if (ownership <= 0 || !metricCounts[metric]) return;
+      weightedTotal += (metricTotals[metric] / metricCounts[metric]) * ownership;
+      weight += ownership;
+    });
+    result[poc] = weight > 0 ? weightedTotal / weight : 0;
+  });
+
+  return result;
+}
+
+function getPocManualSummary_(sheet, monthKey) {
+  var result = {};
+  POC_NAMES.forEach(function(poc) {
+    result[poc] = createPocManualSummary_();
+  });
+
+  if (sheet.getLastRow() < 2) return result;
+
+  var data = sheet.getDataRange().getValues();
+  var header = data[0];
+  var columns = {};
+  header.forEach(function(name, index) {
+    columns[normalizeText_(name)] = index;
+  });
+
+  for (var i = 1; i < data.length; i++) {
+    var dateKey = normalizeDate_(data[i][columns["Date"]]);
+    var poc = normalizePocName_(data[i][columns["POC"]]);
+    if (getMonthKey_(dateKey) !== monthKey || !result[poc]) continue;
+
+    var summary = result[poc];
+    Object.keys(POC_COMPLIANCE_OWNERSHIP).forEach(function(field) {
+      if (!POC_COMPLIANCE_OWNERSHIP[field][poc] || columns[field] === undefined) return;
+      summary.complianceTotal++;
+      if (isPocManualYes_(data[i][columns[field]])) summary.complianceMet++;
+    });
+
+    if (!isPocManualYes_(data[i][columns["Adjusted"]])) {
+      summary.openVarianceCount++;
+      summary.openVarianceQty += toNumber_(data[i][columns["Variance Qty"]]);
+      summary.openVarianceSar += toNumber_(data[i][columns["Variance SAR"]]);
+    }
+  }
+
+  POC_NAMES.forEach(function(poc) {
+    var summary = result[poc];
+    summary.complianceScore = summary.complianceTotal > 0 ? (summary.complianceMet / summary.complianceTotal) * 100 : 0;
+    summary.inventoryScore = calculatePocInventoryScore_(summary);
+  });
+
+  return result;
+}
+
+function createPocManualSummary_() {
+  return {
+    complianceMet: 0,
+    complianceTotal: 0,
+    complianceScore: 0,
+    openVarianceCount: 0,
+    openVarianceQty: 0,
+    openVarianceSar: 0,
+    inventoryScore: 100
+  };
+}
+
+function isPocManualYes_(value) {
+  var text = normalizeForCompare_(value);
+  return value === true || text === "yes" || text === "true" || text === "done" || text === "completed" || text === "adjusted" || text === "1";
+}
+
+function calculatePocInventoryScore_(summary) {
+  var penalty = (summary.openVarianceCount * 10) +
+    Math.min(40, Math.abs(summary.openVarianceQty) * 2) +
+    Math.min(50, Math.abs(summary.openVarianceSar) / 100);
+  return Math.max(0, 100 - penalty);
+}
+
+function calculatePocComplaintScore_(complaintPercent) {
+  if (complaintPercent <= 0.4) return 100;
+  if (complaintPercent < 0.7) return 75;
+  if (complaintPercent <= 1) return 50;
+  return 0;
+}
+
+function calculatePocFinalScore_(operationsScore, complaintScore, bauScore, inventoryScore, complianceScore) {
+  return round2_(
+    (toNumber_(operationsScore) * POC_SCORE_WEIGHTS.OPERATIONS) +
+    (toNumber_(complaintScore) * POC_SCORE_WEIGHTS.COMPLAINT) +
+    (toNumber_(bauScore) * POC_SCORE_WEIGHTS.BAU) +
+    (toNumber_(inventoryScore) * POC_SCORE_WEIGHTS.INVENTORY) +
+    (toNumber_(complianceScore) * POC_SCORE_WEIGHTS.COMPLIANCE)
+  );
+}
+
+function renderPocPerformanceDashboard_(sheet, pocRows) {
+  var startRow = 21;
+  var rows = [[
+    "POC",
+    "MTD Orders",
+    "MTD Items",
+    "Orders Contribution %",
+    "Items Contribution %",
+    "Items Per Order",
+    "Avg AT",
+    "Avg PT",
+    "Avg PKT",
+    "Avg P95",
+    "Complaint Count",
+    "Complaint %",
+    "Avg Bag Deviation",
+    "Merchandising %",
+    "BAU Adherence %",
+    "Open Variance Qty",
+    "Open Variance SAR",
+    "Final Score",
+    "Rank"
+  ]];
+
+  pocRows.sort(function(a, b) {
+    return a.poc.localeCompare(b.poc);
+  }).forEach(function(row) {
+    rows.push([
+      row.poc,
+      row.orders,
+      row.items,
+      round2_(row.ordersContribution),
+      round2_(row.itemsContribution),
+      round2_(row.itemsPerOrder),
+      round2_(row.avgAT),
+      round2_(row.avgPT),
+      round2_(row.avgPKT),
+      round2_(row.avgP95),
+      row.complaints,
+      round2_(row.complaintPercent),
+      round2_(row.avgBagDeviation),
+      round2_(row.merchandising),
+      round2_(row.bauScore),
+      round2_(row.openVarianceQty),
+      round2_(row.openVarianceSar),
+      round2_(row.finalScore),
+      row.rank
+    ]);
+  });
+
+  clearSheetContents_(sheet, startRow, 1, Math.max(sheet.getLastRow() - startRow + 1, 1), 20);
+  sheet.getRange(startRow, 1).setValue("POC PERFORMANCE DASHBOARD");
+  sheet.getRange(startRow + 1, 1, rows.length, rows[0].length).setValues(rows);
+  formatPocDashboardRange_(sheet, startRow, rows.length + 1, rows[0].length);
+}
+
+function renderPocScorecard_(sheet, pocRows, monthKey) {
+  sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).breakApart();
+  sheet.clear();
+  ensureSheetSize_(sheet, 30, 12);
+  sheet.setHiddenGridlines(true);
+  sheet.setTabColor(DASHBOARD_THEME.BACKGROUND);
+  sheet.getRange(1, 1, 30, 12).setBackground(DASHBOARD_THEME.BACKGROUND).setFontColor(DASHBOARD_THEME.SECONDARY_TEXT).setFontFamily("Arial");
+
+  var sorted = pocRows.slice().sort(function(a, b) {
+    return b.finalScore - a.finalScore || a.poc.localeCompare(b.poc);
+  });
+  var totalOpenVariances = pocRows.reduce(function(total, row) {
+    return total + Math.abs(row.openVarianceQty);
+  }, 0);
+  var totalVarianceSar = pocRows.reduce(function(total, row) {
+    return total + Math.abs(row.openVarianceSar);
+  }, 0);
+  var summaryRows = [
+    ["Total Open Variances", round2_(totalOpenVariances)],
+    ["Total Variance SAR", round2_(totalVarianceSar)],
+    ["Best POC", sorted[0] ? sorted[0].poc : "-"],
+    ["Worst POC", sorted[sorted.length - 1] ? sorted[sorted.length - 1].poc : "-"],
+    ["Current Month", monthKey]
+  ];
+  var scoreRows = [[
+    "POC",
+    "Operations Score",
+    "Complaint Score",
+    "BAU Score",
+    "Inventory Score",
+    "Compliance Score",
+    "Open Variance Qty",
+    "Open Variance SAR",
+    "Final Score",
+    "Rank"
+  ]];
+
+  sorted.forEach(function(row, index) {
+    scoreRows.push([
+      row.poc,
+      round2_(row.operationsScore),
+      round2_(row.complaintScore),
+      round2_(row.bauScore),
+      round2_(row.inventoryScore),
+      round2_(row.complianceScore),
+      round2_(row.openVarianceQty),
+      round2_(row.openVarianceSar),
+      round2_(row.finalScore),
+      index + 1
+    ]);
+  });
+
+  sheet.getRange(1, 1).setValue("POC SCORECARD");
+  sheet.getRange(2, 1, summaryRows.length, summaryRows[0].length).setValues(summaryRows);
+  sheet.getRange(8, 1, scoreRows.length, scoreRows[0].length).setValues(scoreRows);
+  formatPocScorecard_(sheet, summaryRows.length, scoreRows.length, scoreRows[0].length);
+}
+
+function formatPocDashboardRange_(sheet, startRow, rowCount, columnCount) {
+  sheet.getRange(startRow, 1, 1, columnCount)
+    .setBackground(DASHBOARD_THEME.NAVY)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold")
+    .setFontSize(15)
+    .setHorizontalAlignment("center");
+  sheet.getRange(startRow + 1, 1, 1, columnCount)
+    .setBackground(DASHBOARD_THEME.SECTION)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold")
+    .setFontSize(10);
+  if (rowCount > 2) {
+    sheet.getRange(startRow + 2, 1, rowCount - 2, columnCount)
+      .setBackground(DASHBOARD_THEME.CARD)
+      .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
+      .setFontSize(10);
+  }
+  sheet.getRange(startRow, 1, rowCount, columnCount)
+    .setFontFamily("Arial")
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle")
+    .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  sheet.autoResizeColumns(1, Math.min(columnCount, 19));
+}
+
+function formatPocScorecard_(sheet, summaryCount, scoreRowCount, scoreColumnCount) {
+  sheet.getRange(1, 1, 1, scoreColumnCount)
+    .setBackground(DASHBOARD_THEME.NAVY)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold")
+    .setFontSize(22);
+  sheet.getRange(2, 1, summaryCount, 2)
+    .setBackground(DASHBOARD_THEME.CARD)
+    .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
+    .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  sheet.getRange(8, 1, 1, scoreColumnCount)
+    .setBackground(DASHBOARD_THEME.SECTION)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold");
+  sheet.getRange(9, 1, Math.max(scoreRowCount - 1, 1), scoreColumnCount)
+    .setBackground(DASHBOARD_THEME.CARD)
+    .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT);
+  sheet.getRange(8, 1, scoreRowCount, scoreColumnCount)
+    .setFontFamily("Arial")
+    .setFontSize(10)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle")
+    .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  sheet.autoResizeColumns(1, scoreColumnCount);
+}
+
+function formatPocInputSheet_(sheet, headerLength) {
+  var lastRow = Math.max(sheet.getLastRow(), 1);
+  sheet.getRange(1, 1, lastRow, headerLength)
+    .setFontFamily("Arial")
+    .setFontSize(10)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle")
+    .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  sheet.getRange(1, 1, 1, headerLength)
+    .setBackground(DASHBOARD_THEME.SECTION)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold");
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, headerLength);
 }
 
 function updateComplaintAnalysis() {
@@ -444,74 +1158,16 @@ function updateComplaintAnalysis() {
   var destSS = SpreadsheetApp.openById(CONFIG.DEST_ID);
   var rcaSheet = getRequiredSheet_(rcaSS, CONFIG.SHEETS.RCA_DATABASE);
   var analysisSheet = getRequiredSheet_(destSS, CONFIG.SHEETS.COMPLAINT_ANALYSIS);
+  var rdbSheet = getRequiredSheet_(destSS, CONFIG.SHEETS.RDB);
   var data = rcaSheet.getDataRange().getValues();
+  var orderContext = getComplaintOrderContextFromRdb_(rdbSheet.getDataRange().getValues());
+  var output = buildComplaintIntelligenceRows_(data, orderContext);
 
-  clearSheetContents_(analysisSheet, 1, 1, Math.max(analysisSheet.getLastRow(), 1), 23);
-
-  writeTable_(
-    analysisSheet,
-    1,
-    1,
-    buildTopUniqueCountList_(data, {
-      header: ["Rank", "SKU ID", "SKU Name", "Unique Order Count"],
-      limit: 5,
-      keyColumn: 5,
-      labelColumn: 8,
-      uniqueColumn: 4
-    })
-  );
-
-  writeTable_(
-    analysisSheet,
-    1,
-    6,
-    buildTopUniqueCountList_(data, {
-      header: ["Rank", "Customer ID", "Unique Order Count"],
-      limit: 5,
-      keyColumn: 15,
-      uniqueColumn: 4
-    })
-  );
-
-  writeTable_(
-    analysisSheet,
-    1,
-    10,
-    buildDeliveryAgentComplaintOrderTable_(data, 5)
-  );
-
-  writeTable_(
-    analysisSheet,
-    1,
-    15,
-    buildUniqueCountTable_(data, {
-      header: ["RCA", "Unique Order Count"],
-      keyColumn: 16,
-      uniqueColumn: 4
-    })
-  );
-
-  writeTable_(
-    analysisSheet,
-    1,
-    18,
-    buildUniqueCountTable_(data, {
-      header: ["Defect Category", "Unique Order Count"],
-      keyColumn: 7,
-      uniqueColumn: 4
-    })
-  );
-
-  writeTable_(
-    analysisSheet,
-    1,
-    21,
-    buildTopList_(data, {
-      header: ["Rank", "Complaint Reason", "Count"],
-      limit: 10,
-      keyColumn: 9
-    })
-  );
+  analysisSheet.getRange(1, 1, analysisSheet.getMaxRows(), analysisSheet.getMaxColumns()).breakApart();
+  analysisSheet.clear();
+  ensureSheetSize_(analysisSheet, output.length + 2, getMaxRowWidth_(output) + 1);
+  writePaddedRows_(analysisSheet, 1, 1, output);
+  formatComplaintIntelligenceSheet_(analysisSheet, output);
 }
 
 function updateWeeklyAnalytics() {
@@ -541,44 +1197,610 @@ function updateWeeklyAnalytics() {
   writeWeeklyAnalyticsBlocks_(weeklySheet, blocks);
 }
 
+function runBauModule() {
+  var config = {
+    sourceId: "1tsolH7eezhIbe5rUgzrROIfh18q6ym_XdXao48R2ra8",
+    sourceSheetName: "Metrics View D-1",
+    dsCode: "RUHDS48",
+    sheets: {
+      live: "BAU_LIVE",
+      history: "BAU_HISTORY",
+      raw: "BAU_RAW"
+    },
+    metrics: [
+      "Offload AM",
+      "Offload CHL",
+      "Offload FZR",
+      "Offload UF",
+      "Putaway AM",
+      "Putaway CHL",
+      "Putaway FZR",
+      "Putaway UF",
+      "FSQ",
+      "Expiry Adherence",
+      "Chiller Movement",
+      "Cycle Count"
+    ],
+    dateHeaders: ["Date", "Business Date", "Metric Date", "Snapshot Date", "Report Date", "Day"],
+    target: 100,
+    theme: {
+      background: "#0B1320",
+      card: "#172033",
+      section: "#22304A",
+      border: "#344055",
+      primary: "#FFFFFF",
+      secondary: "#CBD5E1",
+      muted: "#94A3B8",
+      successBg: "#1F3B2D",
+      successText: "#A7F3D0",
+      declineBg: "#4B2E2E",
+      declineText: "#FECACA",
+      neutralBg: "#334155",
+      neutralText: "#CBD5E1",
+      navy: "#111827"
+    }
+  };
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+
+  if (!spreadsheet) {
+    throw new Error("BAU module must be run from the destination spreadsheet.");
+  }
+
+  var sheets = prepareBauSheets_(spreadsheet, config);
+  var bauData = fetchBauData_(config, sheets.raw);
+  var historyRows = updateBauHistory_(sheets.history, bauData, config);
+  var mtd = calculateBauMtd_(historyRows, config);
+  var missed = buildBauMissedTracker_(mtd, config);
+  renderBauDashboard_(sheets.live, mtd, missed, config);
+}
+
+function prepareBauSheets_(spreadsheet, config) {
+  function getOrCreateSheet(sheetName) {
+    return spreadsheet.getSheetByName(sheetName) || spreadsheet.insertSheet(sheetName);
+  }
+
+  var live = getOrCreateSheet(config.sheets.live);
+  var history = getOrCreateSheet(config.sheets.history);
+  var raw = getOrCreateSheet(config.sheets.raw);
+
+  raw.hideSheet();
+
+  return {
+    live: live,
+    history: history,
+    raw: raw
+  };
+}
+
+function fetchBauData_(config, rawSheet) {
+  function cleanText(value) {
+    return value === null || value === undefined ? "" : String(value).trim();
+  }
+
+  function compareText(value) {
+    return cleanText(value).toLowerCase().replace(/\s+/g, " ");
+  }
+
+  function formatDate(date) {
+    return Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
+
+  function parseDate(value) {
+    if (value instanceof Date) return formatDate(value);
+    var text = cleanText(value);
+    if (!text) return "";
+    var parsed = new Date(text);
+    return isNaN(parsed.getTime()) ? "" : formatDate(parsed);
+  }
+
+  function parseMetric(value) {
+    if (value === null || value === undefined || value === "") return null;
+    if (typeof value === "number") return value > 0 && value <= 1 ? value * 100 : value;
+    var text = cleanText(value).replace("%", "");
+    var normalized = compareText(text);
+    if (normalized === "yes" || normalized === "met") return 100;
+    if (normalized === "no" || normalized === "missed") return 0;
+    var number = Number(text);
+    return isNaN(number) ? null : number;
+  }
+
+  function round2(value) {
+    return Math.round(value * 100) / 100;
+  }
+
+  function buildColumnMap(header) {
+    var map = {};
+    header.forEach(function(name, index) {
+      map[compareText(name)] = index;
+    });
+    return map;
+  }
+
+  function requiredColumn(columnMap, headerName) {
+    var key = compareText(headerName);
+    if (columnMap[key] === undefined) {
+      throw new Error("Missing required BAU source column: " + headerName);
+    }
+    return columnMap[key];
+  }
+
+  function optionalDateColumn(columnMap) {
+    for (var i = 0; i < config.dateHeaders.length; i++) {
+      var key = compareText(config.dateHeaders[i]);
+      if (columnMap[key] !== undefined) return columnMap[key];
+    }
+    return -1;
+  }
+
+  function writeRaw(rows) {
+    rawSheet.clear();
+    if (rows.length > 0) {
+      rawSheet.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+    }
+    rawSheet.hideSheet();
+  }
+
+  var sourceSheet = SpreadsheetApp.openById(config.sourceId).getSheetByName(config.sourceSheetName);
+  if (!sourceSheet) throw new Error("Missing BAU source sheet: " + config.sourceSheetName);
+
+  var sourceData = sourceSheet.getDataRange().getValues();
+  if (!sourceData || sourceData.length < 1) throw new Error("BAU source sheet is empty.");
+
+  var header = sourceData[0].map(cleanText);
+  var columnMap = buildColumnMap(header);
+  var dsColumn = requiredColumn(columnMap, "DS Code");
+  var dateColumn = optionalDateColumn(columnMap);
+  var metricColumns = config.metrics.map(function(metric) {
+    return {
+      metric: metric,
+      column: requiredColumn(columnMap, metric)
+    };
+  });
+  var matchedRows = [];
+
+  for (var r = 1; r < sourceData.length; r++) {
+    if (cleanText(sourceData[r][dsColumn]) === config.dsCode) {
+      matchedRows.push(sourceData[r]);
+    }
+  }
+
+  if (matchedRows.length === 0) throw new Error("No BAU source row found for DS Code: " + config.dsCode);
+
+  writeRaw([header].concat(matchedRows));
+
+  var sourceDate = "";
+  if (dateColumn >= 0) {
+    for (var d = 0; d < matchedRows.length; d++) {
+      sourceDate = parseDate(matchedRows[d][dateColumn]);
+      if (sourceDate) break;
+    }
+  }
+  if (!sourceDate) sourceDate = formatDate(new Date());
+
+  var snapshot = [
+    sourceDate,
+    Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"),
+    sourceDate,
+    config.dsCode
+  ];
+
+  metricColumns.forEach(function(metricColumn) {
+    var total = 0;
+    var count = 0;
+    matchedRows.forEach(function(row) {
+      var value = parseMetric(row[metricColumn.column]);
+      if (value !== null) {
+        total += value;
+        count++;
+      }
+    });
+    snapshot.push(count > 0 ? round2(total / count) : 0);
+  });
+
+  return {
+    sourceDate: sourceDate,
+    snapshot: snapshot
+  };
+}
+
+function updateBauHistory_(historySheet, bauData, config) {
+  function cleanText(value) {
+    return value === null || value === undefined ? "" : String(value).trim();
+  }
+
+  function formatDate(date) {
+    return Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
+
+  function parseDate(value) {
+    if (value instanceof Date) return formatDate(value);
+    var parsed = new Date(cleanText(value));
+    return isNaN(parsed.getTime()) ? cleanText(value) : formatDate(parsed);
+  }
+
+  function readRows(sheet, columns) {
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 1) return [];
+    return sheet.getRange(1, 1, lastRow, Math.max(sheet.getLastColumn(), columns)).getValues();
+  }
+
+  function styleHistory(sheet, lastRow, lastColumn) {
+    if (lastRow < 1 || lastColumn < 1) return;
+    sheet.getRange(1, 1, lastRow, lastColumn)
+      .setFontFamily("Arial")
+      .setFontSize(10)
+      .setHorizontalAlignment("center")
+      .setVerticalAlignment("middle")
+      .setBorder(true, true, true, true, true, true, config.theme.border, SpreadsheetApp.BorderStyle.SOLID);
+    sheet.getRange(1, 1, 1, lastColumn)
+      .setBackground(config.theme.section)
+      .setFontColor(config.theme.primary)
+      .setFontWeight("bold");
+    if (lastRow > 1) {
+      sheet.getRange(2, 1, lastRow - 1, lastColumn)
+        .setBackground(config.theme.card)
+        .setFontColor(config.theme.secondary);
+    }
+    sheet.setFrozenRows(1);
+    sheet.autoResizeColumns(1, Math.min(lastColumn, 16));
+  }
+
+  var header = ["Snapshot Date", "Updated At", "Source Date", "DS Code"].concat(config.metrics);
+  var rows = readRows(historySheet, header.length);
+  var sourceDate = bauData.sourceDate;
+  var targetRow = 0;
+
+  if (rows.length === 0 || cleanText(rows[0][0]) !== "Snapshot Date") {
+    if (rows.length > 0) historySheet.insertRowsBefore(1, 1);
+    historySheet.getRange(1, 1, 1, header.length).setValues([header]);
+    rows = [header].concat(rows);
+  }
+
+  for (var i = 1; i < rows.length; i++) {
+    if (parseDate(rows[i][0]) === sourceDate) {
+      targetRow = i + 1;
+      break;
+    }
+  }
+
+  if (targetRow > 0) {
+    historySheet.getRange(targetRow, 1, 1, header.length).setValues([bauData.snapshot]);
+  } else {
+    historySheet.getRange(historySheet.getLastRow() + 1, 1, 1, header.length).setValues([bauData.snapshot]);
+  }
+
+  styleHistory(historySheet, historySheet.getLastRow(), header.length);
+
+  return readRows(historySheet, header.length);
+}
+
+function calculateBauMtd_(historyRows, config) {
+  function cleanText(value) {
+    return value === null || value === undefined ? "" : String(value).trim();
+  }
+
+  function formatDate(date) {
+    return Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
+
+  function parseDate(value) {
+    if (value instanceof Date) return formatDate(value);
+    var parsed = new Date(cleanText(value));
+    return isNaN(parsed.getTime()) ? cleanText(value) : formatDate(parsed);
+  }
+
+  function monthKey(dateKey) {
+    return dateKey && dateKey.length >= 7 ? dateKey.substring(0, 7) : "";
+  }
+
+  function numberValue(value) {
+    var number = Number(value);
+    return isNaN(number) ? 0 : number;
+  }
+
+  function round2(value) {
+    return Math.round(value * 100) / 100;
+  }
+
+  var currentMonth = monthKey(formatDate(new Date()));
+  var rows = [];
+
+  for (var i = 1; i < historyRows.length; i++) {
+    var dateKey = parseDate(historyRows[i][0]);
+    if (!dateKey || monthKey(dateKey) !== currentMonth) continue;
+
+    var metrics = {};
+    config.metrics.forEach(function(metric, index) {
+      metrics[metric] = numberValue(historyRows[i][index + 4]);
+    });
+
+    rows.push({
+      dateKey: dateKey,
+      metrics: metrics
+    });
+  }
+
+  rows.sort(function(a, b) {
+    return a.dateKey.localeCompare(b.dateKey);
+  });
+
+  var metricRows = config.metrics.map(function(metric) {
+    var achievedDays = 0;
+    rows.forEach(function(row) {
+      if (numberValue(row.metrics[metric]) >= config.target) achievedDays++;
+    });
+    return {
+      metric: metric,
+      achievedDays: achievedDays,
+      totalDays: rows.length,
+      adherence: rows.length > 0 ? round2((achievedDays / rows.length) * 100) : 0
+    };
+  });
+
+  var totalKpiDays = rows.length * config.metrics.length;
+  var achievedKpiDays = 0;
+  metricRows.forEach(function(row) {
+    achievedKpiDays += row.achievedDays;
+  });
+
+  var best = metricRows.slice().sort(function(a, b) {
+    return b.adherence - a.adherence || a.metric.localeCompare(b.metric);
+  })[0] || { metric: "-", adherence: 0 };
+  var worst = metricRows.slice().sort(function(a, b) {
+    return a.adherence - b.adherence || a.metric.localeCompare(b.metric);
+  })[0] || { metric: "-", adherence: 0 };
+  var elapsedDay = Number(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "d"));
+
+  return {
+    currentMonth: currentMonth,
+    rows: rows,
+    metricRows: metricRows,
+    mtdAdherence: totalKpiDays > 0 ? round2((achievedKpiDays / totalKpiDays) * 100) : 0,
+    missedCount: totalKpiDays - achievedKpiDays,
+    bestMetric: best.metric + " (" + best.adherence + "%)",
+    worstMetric: worst.metric + " (" + worst.adherence + "%)",
+    completion: elapsedDay > 0 ? round2((rows.length / elapsedDay) * 100) : 0
+  };
+}
+
+function buildBauMissedTracker_(mtd, config) {
+  var missed = [];
+
+  mtd.rows.forEach(function(row) {
+    config.metrics.forEach(function(metric) {
+      var value = Number(row.metrics[metric]);
+      if (isNaN(value)) value = 0;
+      if (value < config.target) {
+        missed.push([row.dateKey, metric, value, config.target]);
+      }
+    });
+  });
+
+  return missed;
+}
+
+function renderBauDashboard_(liveSheet, mtd, missedRows, config) {
+  function percent(value) {
+    var number = Number(value);
+    if (isNaN(number)) number = 0;
+    return (Math.round(number * 100) / 100).toFixed(2) + "%";
+  }
+
+  function statusStyle(value) {
+    return Number(value) >= config.target
+      ? { background: config.theme.successBg, text: config.theme.successText }
+      : { background: config.theme.declineBg, text: config.theme.declineText };
+  }
+
+  function section(row, column, columns, title, color) {
+    liveSheet.getRange(row, column, 1, columns)
+      .setBackground(color)
+      .setFontColor(config.theme.primary)
+      .setFontWeight("bold")
+      .setFontSize(15)
+      .setHorizontalAlignment("center")
+      .setVerticalAlignment("middle");
+    liveSheet.getRange(row, column).setValue(title);
+    liveSheet.setRowHeight(row, 38);
+  }
+
+  function table(row, column, values, headerColor) {
+    if (!values || values.length === 0) return;
+    liveSheet.getRange(row, column, values.length, values[0].length).setValues(values);
+    var backgrounds = [];
+    for (var r = 0; r < values.length; r++) {
+      var rowBackgrounds = [];
+      for (var c = 0; c < values[0].length; c++) {
+        rowBackgrounds.push(r === 0 ? headerColor : (r % 2 === 0 ? "#1E293B" : config.theme.card));
+      }
+      backgrounds.push(rowBackgrounds);
+    }
+    liveSheet.getRange(row, column, values.length, values[0].length)
+      .setBackgrounds(backgrounds)
+      .setFontColor(config.theme.secondary)
+      .setFontFamily("Arial")
+      .setFontSize(10)
+      .setHorizontalAlignment("center")
+      .setVerticalAlignment("middle")
+      .setWrap(true)
+      .setBorder(true, true, true, true, true, true, config.theme.border, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+    liveSheet.getRange(row, column, 1, values[0].length)
+      .setFontColor(config.theme.primary)
+      .setFontWeight("bold")
+      .setFontSize(11);
+  }
+
+  liveSheet.clear();
+  liveSheet.setHiddenGridlines(true);
+  liveSheet.setFrozenRows(5);
+  liveSheet.setTabColor(config.theme.background);
+  liveSheet.setColumnWidths(1, 14, 126);
+  liveSheet.getRange(1, 1, 100, 14)
+    .setBackground(config.theme.background)
+    .setFontColor(config.theme.secondary)
+    .setFontFamily("Arial");
+
+  liveSheet.getRange(1, 1, 1, 14)
+    .setBackground(config.theme.navy)
+    .setFontColor(config.theme.primary)
+    .setFontWeight("bold")
+    .setFontSize(24)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+  liveSheet.getRange(1, 1).setValue("RUHDS48 BAU TRACKING DASHBOARD");
+  liveSheet.getRange(2, 1, 1, 14)
+    .setBackground(config.theme.section)
+    .setFontColor(config.theme.secondary)
+    .setFontWeight("bold")
+    .setFontSize(13)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+  liveSheet.getRange(2, 1).setValue("Standalone BAU Module     Current Month: " + mtd.currentMonth + "     Target: 100% for every KPI");
+  liveSheet.setRowHeights(1, 2, 42);
+
+  var cards = [
+    ["Month To Date Adherence %", percent(mtd.mtdAdherence), mtd.mtdAdherence >= config.target ? "On Target" : "Below Target"],
+    ["Total Missed BAUs", mtd.missedCount, mtd.missedCount === 0 ? "No Misses" : "Action Required"],
+    ["Best Performing KPI", mtd.bestMetric, "Highest MTD Adherence"],
+    ["Worst Performing KPI", mtd.worstMetric, "Lowest MTD Adherence"],
+    ["Current Month Completion %", percent(mtd.completion), "Recorded Days / Elapsed Days"]
+  ];
+
+  cards.forEach(function(card, index) {
+    var column = 1 + (index * 2);
+    var width = index === 4 ? 6 : 2;
+    liveSheet.getRange(4, column, 4, width)
+      .setBackground(config.theme.card)
+      .setBorder(true, true, true, true, true, true, config.theme.border, SpreadsheetApp.BorderStyle.SOLID_MEDIUM)
+      .setHorizontalAlignment("center")
+      .setVerticalAlignment("middle")
+      .setWrap(true);
+    liveSheet.getRange(4, column, 1, width)
+      .setBackground(config.theme.section)
+      .setFontColor(config.theme.primary)
+      .setFontWeight("bold")
+      .setFontSize(11);
+    liveSheet.getRange(4, column).setValue(card[0]);
+    liveSheet.getRange(5, column, 2, width)
+      .setFontColor(config.theme.primary)
+      .setFontWeight("bold")
+      .setFontSize(16);
+    liveSheet.getRange(5, column).setValue(card[1]);
+    var style = card[2] === "Action Required" || card[2] === "Below Target"
+      ? { background: config.theme.declineBg, text: config.theme.declineText }
+      : { background: config.theme.successBg, text: config.theme.successText };
+    liveSheet.getRange(7, column, 1, width)
+      .setBackground(style.background)
+      .setFontColor(style.text)
+      .setFontWeight("bold")
+      .setFontSize(10);
+    liveSheet.getRange(7, column).setValue(card[2]);
+  });
+
+  section(10, 1, 7, "MISSED BAU TRACKER", config.theme.section);
+  table(12, 1, [["Date", "KPI", "Actual Value", "Target Value"]].concat(missedRows.map(function(row) {
+    return [row[0], row[1], percent(row[2]), percent(row[3])];
+  })), config.theme.section);
+
+  section(10, 8, 7, "MTD ADHERENCE BY KPI", config.theme.section);
+  table(12, 8, [["KPI", "Achieved Days", "Recorded Days", "Adherence %"]].concat(mtd.metricRows.map(function(row) {
+    return [row.metric, row.achievedDays, row.totalDays, percent(row.adherence)];
+  })), config.theme.section);
+
+  var dailyRows = [["Date", "Daily Adherence %", "Missed Count", "Status"]];
+  mtd.rows.forEach(function(row) {
+    var achieved = 0;
+    config.metrics.forEach(function(metric) {
+      if (Number(row.metrics[metric]) >= config.target) achieved++;
+    });
+    var dailyAdherence = config.metrics.length > 0 ? (achieved / config.metrics.length) * 100 : 0;
+    dailyRows.push([row.dateKey, percent(dailyAdherence), config.metrics.length - achieved, dailyAdherence >= config.target ? "On Target" : "Below Target"]);
+  });
+
+  section(32, 1, 14, "DAILY ADHERENCE TABLE", config.theme.section);
+  table(34, 1, dailyRows, config.theme.section);
+
+  for (var i = 1; i < dailyRows.length; i++) {
+    var style = statusStyle(parseFloat(String(dailyRows[i][1]).replace("%", "")));
+    liveSheet.getRange(34 + i, 2)
+      .setBackground(style.background)
+      .setFontColor(style.text)
+      .setFontWeight("bold");
+  }
+}
+
 function updateDarkStoreDashboard() {
   var ss = SpreadsheetApp.openById(CONFIG.DEST_ID);
   var graphsSheet = getOrCreateSheet_(ss, CONFIG.SHEETS.DARK_STORE_GRAPHS);
+  var dataSheet = getOrCreateSheet_(ss, CONFIG.SHEETS.DARK_STORE_DATA);
   var hourlySheet = getRequiredSheet_(ss, CONFIG.SHEETS.RDB_HOURLY);
   var mtdSheet = getRequiredSheet_(ss, CONFIG.SHEETS.MTD_DASHBOARD);
   var rdbSheet = getRequiredSheet_(ss, CONFIG.SHEETS.RDB);
-
-  prepareGraphsSheet_(graphsSheet);
 
   var allHourlyRows = getAllHourlyRows_(hourlySheet);
   var hourlyRows = getLatestHourlyRowsFromRows_(allHourlyRows);
   var latestDate = hourlyRows.length > 0 ? hourlyRows[0].dateKey : "";
   var comparisonDate = latestDate ? addDaysToDateKey_(latestDate, -7) : "";
+  var comparisonHourlyRows = getHourlyRowsForDate_(allHourlyRows, comparisonDate);
   var mtdRows = getMtdDashboardRows_(mtdSheet);
   var orderMatrix = buildHourlyMetricComparisonMatrix_(allHourlyRows, "orders", latestDate, comparisonDate);
   var itemMatrix = buildHourlyMetricComparisonMatrix_(allHourlyRows, "items", latestDate, comparisonDate);
   var performanceRows = buildHourlyPerformanceRows_(hourlyRows);
   var dailyComparisonRows = buildDailyComparisonRows_(rdbSheet, latestDate, comparisonDate);
+  var dailySummaryRows = buildDailyPerformanceSummaryRows_(dailyComparisonRows);
+  var productivityRows = buildProductivityKpiRows_(dailyComparisonRows, hourlyRows, comparisonHourlyRows);
+  var peakHourRows = buildPeakHourAnalysisRows_(hourlyRows, comparisonHourlyRows);
+  var heatmapRows = buildHourlyHeatmapRows_(orderMatrix, itemMatrix, performanceRows);
+  var speedComparisonRows = buildHourlySpeedComparisonRows_(hourlyRows, comparisonHourlyRows);
 
-  renderGraphsHeader_(graphsSheet, latestDate, comparisonDate);
-  renderTopBarViews_(graphsSheet, orderMatrix, itemMatrix);
-  renderGraphSourceTables_(graphsSheet, orderMatrix, itemMatrix, performanceRows, dailyComparisonRows, mtdRows);
-  insertDashboardCharts_(graphsSheet, hourlyRows, mtdRows, orderMatrix, itemMatrix, performanceRows, dailyComparisonRows);
+  resetDashboardSheet_(graphsSheet);
+  prepareDarkStoreDataSheet_(dataSheet);
+  renderGraphSourceTables_(dataSheet, orderMatrix, itemMatrix, performanceRows, dailyComparisonRows, mtdRows, productivityRows, peakHourRows, heatmapRows);
+
+  renderGraphsHeader_(graphsSheet, latestDate, comparisonDate, dailySummaryRows);
+  renderHeaderMetrics_(graphsSheet, latestDate, comparisonDate, dailyComparisonRows);
+  renderDailyPerformanceSummary_(graphsSheet, dailySummaryRows);
+  renderProductivityKpiCards_(graphsSheet, productivityRows);
+  renderDashboardComparisonSections_(graphsSheet);
+  renderHourlyMetricComparisonTable_(graphsSheet, GRAPH_LAYOUT.ORDERS_TABLE_ROW, 1, orderMatrix, "Orders");
+  renderHourlyMetricComparisonTable_(graphsSheet, GRAPH_LAYOUT.ITEMS_TABLE_ROW, 8, itemMatrix, "Items");
+  renderHourlySpeedComparisonTable_(graphsSheet, speedComparisonRows);
+  renderVarianceAnalysisTable_(graphsSheet, dailyComparisonRows);
+  renderSlaMonitor_(graphsSheet, dailyComparisonRows);
+  renderPeakHourAnalysis_(graphsSheet, peakHourRows);
+  renderTopPickerMtdRanking_(graphsSheet, mtdRows);
 }
 
 function resetDashboardSheet_(sheet) {
   sheet.getCharts().forEach(function(chart) {
     sheet.removeChart(chart);
   });
+  sheet.setFrozenRows(0);
   sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).breakApart();
   sheet.clear();
-  ensureSheetSize_(sheet, 145, 45);
-  sheet.setFrozenRows(2);
+  ensureSheetSize_(sheet, GRAPH_LAYOUT.DASHBOARD_MIN_ROWS, GRAPH_LAYOUT.DASHBOARD_MIN_COLUMNS);
+  sheet.setFrozenRows(6);
   sheet.setHiddenGridlines(true);
+  sheet.setTabColor(DASHBOARD_THEME.BACKGROUND);
+  sheet.setColumnWidths(1, GRAPH_LAYOUT.DASHBOARD_MIN_COLUMNS, 126);
+  sheet.setRowHeights(1, GRAPH_LAYOUT.DASHBOARD_MIN_ROWS, 34);
+  sheet.getRange(1, 1, GRAPH_LAYOUT.DASHBOARD_MIN_ROWS, GRAPH_LAYOUT.DASHBOARD_MIN_COLUMNS)
+    .setBackground(DASHBOARD_THEME.BACKGROUND)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontFamily("Arial");
 }
 
 function prepareGraphsSheet_(sheet) {
-  ensureSheetSize_(sheet, 310, 45);
+  resetDashboardSheet_(sheet);
+}
+
+function prepareDarkStoreDataSheet_(sheet) {
+  sheet.setFrozenRows(0);
+  sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).breakApart();
+  sheet.clear();
+  ensureSheetSize_(sheet, GRAPH_LAYOUT.DATA_MIN_ROWS, GRAPH_LAYOUT.DATA_MIN_COLUMNS);
+  sheet.setHiddenGridlines(true);
+  sheet.hideSheet();
 }
 
 function getLatestHourlyRows_(hourlySheet) {
@@ -637,6 +1859,16 @@ function getLatestHourlyRowsFromRows_(allHourlyRows) {
   });
 
   return rows;
+}
+
+function getHourlyRowsForDate_(allHourlyRows, dateKey) {
+  if (!dateKey) return [];
+
+  return allHourlyRows.filter(function(row) {
+    return row.dateKey === dateKey;
+  }).sort(function(a, b) {
+    return a.hour - b.hour;
+  });
 }
 
 function buildHourlyMetricMatrix_(hourlyRows, metricName) {
@@ -836,106 +2068,176 @@ function getMtdDashboardRows_(mtdSheet) {
   return rows;
 }
 
-function renderGraphsHeader_(sheet, latestDate, comparisonDate) {
-  sheet.getRange("A1").setValue("DARK STORE HOURLY GRAPHS");
-  sheet.getRange("A2").setValue("Comparing latest day " + (latestDate || "-") + " vs same day last week " + (comparisonDate || "-") + " | Graphs update when runAll/createTrigger runs");
+function renderGraphsHeader_(sheet, latestDate, comparisonDate, dailySummaryRows) {
+  var refreshedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+  var overall = getOverallPerformanceStatus_(dailySummaryRows);
+
+  sheet.getRange("A1:N1")
+    .merge()
+    .setValue("RUHDS48 OPERATIONS PERFORMANCE DASHBOARD")
+    .setBackground(DASHBOARD_THEME.NAVY)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold")
+    .setFontSize(24)
+    .setFontFamily("Arial")
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+
+  sheet.getRange("A2:N2")
+    .merge()
+    .setValue("Latest Available Date vs Same Day Last Week  |  " + buildExecutiveBannerText_(dailySummaryRows))
+    .setBackground(DASHBOARD_THEME.NAVY)
+    .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
+    .setFontWeight("bold")
+    .setFontSize(14)
+    .setFontFamily("Arial")
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+
+  sheet.getRange("A3:N3")
+    .merge()
+    .setValue("Overall Status: " + overall.label + "     Last Refresh Time: " + refreshedAt + "     Latest Date: " + (latestDate || "-") + "     Comparison Date: " + (comparisonDate || "-"))
+    .setBackground(overall.color)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold")
+    .setFontSize(14)
+    .setFontFamily("Arial")
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+
+  sheet.setRowHeights(1, 1, 45);
+  sheet.setRowHeights(2, 1, 42);
+  sheet.setRowHeights(3, 1, 40);
 }
 
-function renderTopBarViews_(sheet, orderMatrix, itemMatrix) {
-  renderBarComparisonTable_(
-    sheet,
-    GRAPH_LAYOUT.ORDER_BAR_ROW,
-    1,
-    "Hourly Orders: Latest Day vs Same Day Last Week",
-    orderMatrix,
-    "#64748b",
-    "#2563eb"
-  );
-  renderBarComparisonTable_(
-    sheet,
-    GRAPH_LAYOUT.ITEM_BAR_ROW,
-    1,
-    "Hourly Items: Latest Day vs Same Day Last Week",
-    itemMatrix,
-    "#64748b",
-    "#16a34a"
-  );
+function renderHeaderMetrics_(sheet, latestDate, comparisonDate, dailyComparisonRows) {
+  var orders = getDailyComparisonValue_(dailyComparisonRows, "Orders");
+  var items = getDailyComparisonValue_(dailyComparisonRows, "Items");
+  var metrics = [
+    ["Last Refresh Time", Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss")],
+    ["Latest Data Date", latestDate || "-"],
+    ["Same Day Last Week Date", comparisonDate || "-"],
+    ["Total Orders Today", formatKpiValue_(orders.today, "integer")],
+    ["Total Orders Last Week", formatKpiValue_(orders.lastWeek, "integer")],
+    ["Total Items Today", formatKpiValue_(items.today, "integer")],
+    ["Total Items Last Week", formatKpiValue_(items.lastWeek, "integer")]
+  ];
+
+  metrics.forEach(function(metric, index) {
+    var column = 1 + (index * 2);
+    sheet.getRange(4, column, 1, 2)
+      .merge()
+      .setValue(metric[0])
+      .setBackground(DASHBOARD_THEME.SECTION)
+      .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
+      .setFontWeight("bold")
+      .setFontSize(10)
+      .setFontFamily("Arial")
+      .setHorizontalAlignment("center");
+    sheet.getRange(5, column, 1, 2)
+      .merge()
+      .setValue(metric[1])
+      .setBackground(DASHBOARD_THEME.CARD)
+      .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+      .setFontWeight("bold")
+      .setFontSize(12)
+      .setFontFamily("Arial")
+      .setHorizontalAlignment("center");
+  });
+
+  sheet.getRange("A4:N5").setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+  sheet.setRowHeights(4, 1, 34);
+  sheet.setRowHeights(5, 1, 40);
 }
 
-function renderBarComparisonTable_(sheet, startRow, startColumn, title, matrix, previousColor, latestColor) {
-  if (!matrix || matrix.length < 2) return;
-
-  var previousMax = getColumnMax_(matrix, 1);
-  var latestMax = getColumnMax_(matrix, 2);
-  var rows = [[
-    "Hour",
-    matrix[0][1],
-    "Last Week Bar",
-    matrix[0][2],
-    "Latest Day Bar",
-    "Variance",
-    "Variance %"
-  ]];
-
-  for (var i = 1; i < matrix.length; i++) {
-    var variancePercent = matrix[i][1] !== 0
-      ? (matrix[i][3] / matrix[i][1]) * 100
-      : "";
-
-    rows.push([
-      matrix[i][0],
-      matrix[i][1],
-      barText_(matrix[i][1], previousMax),
-      matrix[i][2],
-      barText_(matrix[i][2], latestMax),
-      matrix[i][3],
-      variancePercent === "" ? "" : round2_(variancePercent)
-    ]);
-  }
-
-  ensureSheetSize_(sheet, startRow + rows.length + 2, startColumn + rows[0].length + 1);
-  sheet.getRange(startRow, startColumn, rows.length + 1, rows[0].length).clearContent();
-  sheet.getRange(startRow, startColumn).setValue(title);
-  sheet.getRange(startRow + 1, startColumn, rows.length, rows[0].length).setValues(rows);
+function renderDailyPerformanceSummary_(sheet, dailySummaryRows) {
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.SUMMARY_ROW - 1, 1, 14, "DAILY PERFORMANCE SUMMARY", DASHBOARD_THEME.NAVY);
+  renderKpiCards_(sheet, GRAPH_LAYOUT.SUMMARY_ROW, dailySummaryRows, 2);
 }
 
-function getColumnMax_(matrix, columnIndex) {
-  var maxValue = 0;
-
-  for (var i = 1; i < matrix.length; i++) {
-    maxValue = Math.max(maxValue, toNumber_(matrix[i][columnIndex]));
-  }
-
-  return maxValue;
+function renderProductivityKpiCards_(sheet, productivityRows) {
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.PRODUCTIVITY_ROW - 1, 1, 12, "PRODUCTIVITY KPIS", DASHBOARD_THEME.GREEN);
+  renderKpiCards_(sheet, GRAPH_LAYOUT.PRODUCTIVITY_ROW, productivityRows, 3);
 }
 
-function barText_(value, maxValue) {
-  if (maxValue <= 0 || value <= 0) return "";
-
-  return repeatText_("#", Math.max(1, Math.round((value / maxValue) * 20)));
+function renderDashboardComparisonSections_(sheet) {
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.ORDERS_TABLE_ROW - 2, 1, 7, "HOURLY ORDERS COMPARISON", DASHBOARD_THEME.BLUE);
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.ITEMS_TABLE_ROW - 2, 8, 7, "HOURLY ITEMS COMPARISON", DASHBOARD_THEME.GREEN);
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.SPEED_TABLE_ROW - 2, 1, 14, "HOURLY SPEED COMPARISON", DASHBOARD_THEME.WARNING);
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.VARIANCE_ROW - 2, 1, 7, "VARIANCE ANALYSIS TABLE", DASHBOARD_THEME.SECTION);
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.SLA_ROW - 2, 8, 7, "SLA MONITOR", DASHBOARD_THEME.ORANGE);
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.PEAK_HOUR_ROW - 2, 1, 14, "PEAK HOUR ANALYSIS", DASHBOARD_THEME.CYAN);
+  renderDashboardSectionTitle_(sheet, GRAPH_LAYOUT.PICKER_ROW - 1, 1, 14, "TOP PICKER MTD RANKING", DASHBOARD_THEME.GREEN);
 }
 
-function repeatText_(text, count) {
-  var output = "";
-
-  for (var i = 0; i < count; i++) {
-    output += text;
-  }
-
-  return output;
+function renderDashboardSectionTitle_(sheet, row, column, numColumns, title, color) {
+  sheet.getRange(row, column, 1, numColumns)
+    .merge()
+    .setValue(title)
+    .setBackground(color)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold")
+    .setFontSize(15)
+    .setFontFamily("Arial")
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+  sheet.setRowHeight(row, 38);
 }
 
-function renderGraphSourceTables_(sheet, orderMatrix, itemMatrix, performanceRows, dailyComparisonRows, mtdRows) {
+function renderKpiCards_(sheet, startRow, kpiRows, cardWidth) {
+  kpiRows.forEach(function(kpi, index) {
+    var column = 1 + (index * cardWidth);
+    var cardRange = sheet.getRange(startRow, column, 5, cardWidth);
+    var titleRange = sheet.getRange(startRow, column, 1, cardWidth);
+    var todayRange = sheet.getRange(startRow + 1, column, 1, cardWidth);
+    var lastWeekRange = sheet.getRange(startRow + 2, column, 1, cardWidth);
+    var varianceRange = sheet.getRange(startRow + 3, column, 1, cardWidth);
+    var statusRange = sheet.getRange(startRow + 4, column, 1, cardWidth);
+    var cardColor = getKpiCardColor_(kpi.metric);
+
+    titleRange.merge().setValue(kpi.metric);
+    todayRange.merge().setValue("Today: " + kpi.todayText);
+    lastWeekRange.merge().setValue("Last Week: " + kpi.lastWeekText);
+    varianceRange.merge().setValue("Variance: " + kpi.varianceText);
+    statusRange.merge().setValue("Status: " + kpi.indicator + " " + kpi.status);
+
+    cardRange
+      .setBackground(DASHBOARD_THEME.CARD)
+      .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+      .setFontFamily("Arial")
+      .setHorizontalAlignment("center")
+      .setVerticalAlignment("middle")
+      .setWrap(true)
+      .setBorder(true, true, true, true, true, true, cardColor, SpreadsheetApp.BorderStyle.SOLID_THICK);
+
+    titleRange
+      .setBackground(DASHBOARD_THEME.SECTION)
+      .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+      .setFontWeight("bold")
+      .setFontSize(12);
+    todayRange.setFontWeight("bold").setFontSize(14).setFontColor(DASHBOARD_THEME.PRIMARY_TEXT);
+    lastWeekRange.setFontSize(12).setFontColor(DASHBOARD_THEME.SECONDARY_TEXT);
+    varianceRange.setFontWeight("bold").setFontSize(13).setFontColor(kpi.color);
+    applyComparisonCellStyle_(todayRange, kpi.status);
+    statusRange
+      .setBackground(kpi.background)
+      .setFontColor(kpi.color)
+      .setFontWeight("bold")
+      .setFontSize(13);
+  });
+
+  sheet.setRowHeights(startRow, 5, 34);
+}
+
+function renderGraphSourceTables_(sheet, orderMatrix, itemMatrix, performanceRows, dailyComparisonRows, mtdRows, productivityRows, peakHourRows, heatmapRows) {
   renderDashboardMatrix_(sheet, GRAPH_LAYOUT.ORDER_SOURCE_ROW, 1, "Hourly Orders Source Data", orderMatrix, "#1f4e79");
   renderDashboardMatrix_(sheet, GRAPH_LAYOUT.ITEM_SOURCE_ROW, 1, "Hourly Items Source Data", itemMatrix, "#548235");
   renderDashboardMatrix_(sheet, GRAPH_LAYOUT.PERFORMANCE_SOURCE_ROW, 1, "Latest Date Speed / SLA Source Data", performanceRows, "#7030a0");
   renderDashboardMatrix_(sheet, GRAPH_LAYOUT.DAILY_KPI_SOURCE_ROW, 1, "Daily KPI Source Data", dailyComparisonRows, "#0b1f3a");
-  var topRows = [["Picker", "MTD Score"]].concat(
-    mtdRows.slice(0, 5).map(function(row, index) {
-      return [row.picker, row.score];
-    })
-  );
-  renderDashboardMatrix_(sheet, GRAPH_LAYOUT.TOP_PICKER_SOURCE_ROW, 1, "Top Picker MTD Score", topRows, "#14532d");
+  renderDashboardMatrix_(sheet, GRAPH_LAYOUT.TOP_PICKER_SOURCE_ROW, 1, "Top Picker MTD Source Data", buildTopPickerSourceRows_(mtdRows), "#14532d");
+  renderDashboardMatrix_(sheet, GRAPH_LAYOUT.PRODUCTIVITY_SOURCE_ROW, 1, "Productivity KPI Source Data", kpiRowsToTable_(productivityRows), "#14532d");
+  renderDashboardMatrix_(sheet, GRAPH_LAYOUT.PEAK_HOUR_SOURCE_ROW, 1, "Peak Hour Analysis Source Data", peakHourRows, "#0369a1");
+  renderDashboardMatrix_(sheet, GRAPH_LAYOUT.HEATMAP_SOURCE_ROW, 1, "Hourly Heatmap Source Data", heatmapRows, "#991b1b");
 }
 
 function renderDashboardMatrix_(sheet, startRow, startColumn, title, values, color) {
@@ -943,140 +2245,584 @@ function renderDashboardMatrix_(sheet, startRow, startColumn, title, values, col
 
   ensureSheetSize_(sheet, startRow + values.length + 2, startColumn + values[0].length + 1);
   sheet.getRange(startRow, startColumn, values.length + 1, values[0].length).clearContent();
-  sheet.getRange(startRow, startColumn).setValue(title);
+  sheet.getRange(startRow, startColumn)
+    .setValue(title)
+    .setBackground(color || "#0b1f3a")
+    .setFontColor("#ffffff")
+    .setFontWeight("bold");
   sheet.getRange(startRow + 1, startColumn, values.length, values[0].length).setValues(values);
 }
 
-function insertDashboardCharts_(sheet, hourlyRows, mtdRows, orderMatrix, itemMatrix, performanceRows, dailyComparisonRows) {
-  if (orderMatrix.length > 1 && orderMatrix[0].length > 1) {
-    upsertDashboardChart_(
-      sheet,
-      "Hourly Order Flow by Date",
-      Charts.ChartType.COLUMN,
-      sheet.getRange(GRAPH_LAYOUT.ORDER_SOURCE_ROW + 1, 1, orderMatrix.length, Math.min(orderMatrix[0].length, 3)),
-      GRAPH_LAYOUT.ORDER_CHART_ROW,
-      GRAPH_LAYOUT.CHART_COLUMN,
-      {
-        hAxisTitle: "Hour",
-        vAxisTitle: "Orders",
-        colors: ["#64748b", "#2563eb"]
-      }
-    );
+function renderHourlyMetricComparisonTable_(sheet, startRow, startColumn, matrix, metricName) {
+  var rows = [["Hour", "Today " + metricName, "Last Week " + metricName, "Difference", "Variance %"]];
+
+  for (var i = 1; i < matrix.length; i++) {
+    var lastWeek = toNumber_(matrix[i][1]);
+    var today = toNumber_(matrix[i][2]);
+    var difference = today - lastWeek;
+    var variancePercent = lastWeek !== 0 ? (difference / lastWeek) * 100 : "";
+
+    rows.push([
+      matrix[i][0],
+      today,
+      lastWeek,
+      difference,
+      variancePercent === "" ? "" : formatVarianceText_(variancePercent)
+    ]);
   }
 
-  if (itemMatrix.length > 1 && itemMatrix[0].length > 1) {
-    upsertDashboardChart_(
-      sheet,
-      "Hourly Item Flow by Date",
-      Charts.ChartType.COLUMN,
-      sheet.getRange(GRAPH_LAYOUT.ITEM_SOURCE_ROW + 1, 1, itemMatrix.length, Math.min(itemMatrix[0].length, 3)),
-      GRAPH_LAYOUT.ITEM_CHART_ROW,
-      GRAPH_LAYOUT.CHART_COLUMN,
-      {
-        hAxisTitle: "Hour",
-        vAxisTitle: "Items",
-        colors: ["#64748b", "#16a34a"]
-      }
-    );
-  }
+  sheet.getRange(startRow, startColumn, rows.length, rows[0].length).setValues(rows);
+  formatDashboardTable_(sheet, startRow, startColumn, rows.length, rows[0].length, DASHBOARD_THEME.SECTION);
 
-  if (performanceRows.length > 1) {
-    upsertDashboardChart_(
-      sheet,
-      "Latest Date AT / PT / PKT / P95 by Hour",
-      Charts.ChartType.COLUMN,
-      sheet.getRange(GRAPH_LAYOUT.PERFORMANCE_SOURCE_ROW + 1, 1, performanceRows.length, performanceRows[0].length),
-      GRAPH_LAYOUT.PERFORMANCE_CHART_ROW,
-      GRAPH_LAYOUT.CHART_COLUMN,
-      {
-        hAxisTitle: "Hour",
-        vAxisTitle: "Time",
-        colors: ["#2563eb", "#ca8a04", "#ea580c", "#dc2626"]
-      }
-    );
-  }
-
-  if (dailyComparisonRows.length > 1) {
-    upsertDashboardChart_(
-      sheet,
-      "Latest Day vs Same Day Last Week - KPI Comparison",
-      Charts.ChartType.COLUMN,
-      sheet.getRange(GRAPH_LAYOUT.DAILY_KPI_SOURCE_ROW + 1, 1, dailyComparisonRows.length, 3),
-      GRAPH_LAYOUT.DAILY_KPI_CHART_ROW,
-      GRAPH_LAYOUT.CHART_COLUMN,
-      {
-        hAxisTitle: "KPI",
-        vAxisTitle: "Value",
-        colors: ["#64748b", "#2563eb"]
-      }
-    );
-  }
-
-  if (mtdRows.length > 0) {
-    upsertDashboardChart_(
-      sheet,
-      "Top Picker MTD Score",
-      Charts.ChartType.BAR,
-      sheet.getRange(GRAPH_LAYOUT.TOP_PICKER_SOURCE_ROW + 1, 1, Math.min(mtdRows.length, 5) + 1, 2),
-      GRAPH_LAYOUT.TOP_PICKER_CHART_ROW,
-      GRAPH_LAYOUT.CHART_COLUMN,
-      {
-        hAxisTitle: "MTD Score",
-        vAxisTitle: "Picker",
-        colors: ["#16a34a"]
-      }
-    );
-  }
-
-  sheet.autoResizeColumns(1, 14);
-}
-
-function upsertDashboardChart_(sheet, title, chartType, range, defaultRow, defaultColumn, options) {
-  var existingChart = findChartByTitle_(sheet, title);
-
-  if (existingChart) {
-    var builder = existingChart.modify().clearRanges().addRange(range);
-    var container = existingChart.getContainerInfo();
-    builder.setPosition(
-      container.getAnchorRow(),
-      container.getAnchorColumn(),
-      container.getOffsetX(),
-      container.getOffsetY()
-    );
-    sheet.updateChart(builder.build());
-  } else {
-    var newBuilder = sheet.newChart()
-      .setChartType(chartType)
-      .addRange(range)
-      .setOption("title", title)
-      .setOption("legend", { position: "right" })
-      .setOption("hAxis", { title: options.hAxisTitle })
-      .setOption("vAxis", { title: options.vAxisTitle })
-      .setOption("colors", options.colors || ["#2563eb", "#16a34a"])
-      .setPosition(defaultRow, defaultColumn, 0, 0);
-
-    sheet.insertChart(newBuilder.build());
+  for (var row = 1; row < rows.length; row++) {
+    var status = getTrendIndicator_(toNumber_(rows[row][3]), true).status;
+    applyComparisonCellStyle_(sheet.getRange(startRow + row, startColumn + 1), status);
   }
 }
 
-function findChartByTitle_(sheet, title) {
-  var charts = sheet.getCharts();
+function buildHourlySpeedComparisonRows_(hourlyRows, comparisonHourlyRows) {
+  var latestByHour = mapHourlyRowsByHour_(hourlyRows);
+  var comparisonByHour = mapHourlyRowsByHour_(comparisonHourlyRows);
+  var rows = [["Hour", "Today AT", "Last Week AT", "Today PT", "Last Week PT", "Today PKT", "Last Week PKT", "Today P95", "Last Week P95"]];
 
-  for (var i = 0; i < charts.length; i++) {
-    if (getChartTitle_(charts[i]) === title) {
-      return charts[i];
+  for (var hour = 0; hour < 24; hour++) {
+    var latest = latestByHour[hour] || {};
+    var comparison = comparisonByHour[hour] || {};
+
+    rows.push([
+      hour,
+      round2_(toNumber_(latest.at)),
+      round2_(toNumber_(comparison.at)),
+      round2_(toNumber_(latest.pt)),
+      round2_(toNumber_(comparison.pt)),
+      round2_(toNumber_(latest.pkt)),
+      round2_(toNumber_(comparison.pkt)),
+      round2_(toNumber_(latest.p95)),
+      round2_(toNumber_(comparison.p95))
+    ]);
+  }
+
+  return rows;
+}
+
+function mapHourlyRowsByHour_(hourlyRows) {
+  var rowsByHour = {};
+
+  hourlyRows.forEach(function(row) {
+    rowsByHour[row.hour] = row;
+  });
+
+  return rowsByHour;
+}
+
+function renderHourlySpeedComparisonTable_(sheet, speedComparisonRows) {
+  var startRow = GRAPH_LAYOUT.SPEED_TABLE_ROW;
+  sheet.getRange(startRow, 1, speedComparisonRows.length, speedComparisonRows[0].length).setValues(speedComparisonRows);
+  formatDashboardTable_(sheet, startRow, 1, speedComparisonRows.length, speedComparisonRows[0].length, DASHBOARD_THEME.SECTION);
+
+  for (var row = 1; row < speedComparisonRows.length; row++) {
+    applyComparisonCellStyle_(sheet.getRange(startRow + row, 2), getTrendIndicator_(toNumber_(speedComparisonRows[row][1]) - toNumber_(speedComparisonRows[row][2]), false).status);
+    applyComparisonCellStyle_(sheet.getRange(startRow + row, 4), getTrendIndicator_(toNumber_(speedComparisonRows[row][3]) - toNumber_(speedComparisonRows[row][4]), false).status);
+    applyComparisonCellStyle_(sheet.getRange(startRow + row, 6), getTrendIndicator_(toNumber_(speedComparisonRows[row][5]) - toNumber_(speedComparisonRows[row][6]), false).status);
+    applyComparisonCellStyle_(sheet.getRange(startRow + row, 8), getTrendIndicator_(toNumber_(speedComparisonRows[row][7]) - toNumber_(speedComparisonRows[row][8]), false).status);
+  }
+}
+
+function renderVarianceAnalysisTable_(sheet, dailyComparisonRows) {
+  var values = [["Metric", "Today", "Last Week", "Difference", "Variance %"]];
+
+  for (var i = 1; i < dailyComparisonRows.length; i++) {
+    values.push([
+      dailyComparisonRows[i][0],
+      dailyComparisonRows[i][2],
+      dailyComparisonRows[i][1],
+      dailyComparisonRows[i][3],
+      dailyComparisonRows[i][4] === "" ? "" : formatVarianceText_(dailyComparisonRows[i][4])
+    ]);
+  }
+
+  var startRow = GRAPH_LAYOUT.VARIANCE_ROW;
+  sheet.getRange(startRow, 8, values.length, values[0].length).setValues(values);
+  formatDashboardTable_(sheet, startRow, 8, values.length, values[0].length, DASHBOARD_THEME.NAVY);
+
+  for (var row = 1; row < values.length; row++) {
+    var metricName = values[row][0];
+    var diff = toNumber_(values[row][3]);
+    var higherIsBetter = isHigherBetterMetric_(metricName);
+    var trend = getTrendIndicator_(diff, higherIsBetter);
+    applyComparisonCellStyle_(sheet.getRange(startRow + row, 9), trend.status);
+    sheet.getRange(startRow + row, 12).setFontColor(trend.color).setFontWeight("bold");
+  }
+}
+
+function renderSlaMonitor_(sheet, dailyComparisonRows) {
+  var rows = [["Metric", "Today", "Target", "Status"]];
+  [
+    ["AT", "Avg AT", 5],
+    ["PT", "Avg PT", 11],
+    ["PKT", "Avg PKT", 5],
+    ["P95", "Avg P95", 2]
+  ].forEach(function(definition) {
+    var metric = getDailyComparisonValue_(dailyComparisonRows, definition[1]);
+    var met = metric.today <= definition[2];
+    rows.push([
+      definition[0],
+      round2_(metric.today),
+      "<= " + definition[2],
+      met ? "GREEN | Target Met" : "RED | Target Missed"
+    ]);
+  });
+
+  var startRow = GRAPH_LAYOUT.SLA_ROW;
+  sheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
+  formatDashboardTable_(sheet, startRow, 1, rows.length, rows[0].length, DASHBOARD_THEME.ORANGE);
+
+  for (var i = 1; i < rows.length; i++) {
+    var statusRange = sheet.getRange(startRow + i, 4);
+    var metTarget = rows[i][3].indexOf("GREEN") === 0;
+    statusRange
+      .setValue(metTarget ? "● TARGET MET" : "● TARGET MISSED")
+      .setBackground(metTarget ? "#1F3B2D" : "#4B2E2E")
+      .setFontColor(metTarget ? "#A7F3D0" : "#FECACA")
+      .setFontWeight("bold");
+    applyComparisonCellStyle_(sheet.getRange(startRow + i, 2), metTarget ? "Improved" : "Declined");
+  }
+}
+
+function renderPeakHourAnalysis_(sheet, peakHourRows) {
+  var startRow = GRAPH_LAYOUT.PEAK_HOUR_ROW;
+  sheet.getRange(startRow, 8, peakHourRows.length, peakHourRows[0].length).setValues(peakHourRows);
+  formatDashboardTable_(sheet, startRow, 8, peakHourRows.length, peakHourRows[0].length, DASHBOARD_THEME.CYAN);
+
+  for (var i = 1; i < peakHourRows.length; i++) {
+    var status = normalizeText_(peakHourRows[i][5]);
+    var color = status.indexOf("Improved") >= 0 ? "#A7F3D0" : status.indexOf("Declined") >= 0 ? "#FECACA" : DASHBOARD_THEME.SECONDARY_TEXT;
+    var background = status.indexOf("Improved") >= 0 ? "#1F3B2D" : status.indexOf("Declined") >= 0 ? "#4B2E2E" : DASHBOARD_THEME.SECTION;
+    applyComparisonCellStyle_(sheet.getRange(startRow + i, 10), status.indexOf("Improved") >= 0 ? "Improved" : status.indexOf("Declined") >= 0 ? "Declined" : "Stable");
+    sheet.getRange(startRow + i, 13)
+      .setBackground(background)
+      .setFontColor(color)
+      .setFontWeight("bold");
+  }
+}
+
+function renderTopPickerMtdRanking_(sheet, mtdRows) {
+  var rows = [["Rank", "Picker", "MTD Score", "Orders", "Items", "Complaints", "Complaint %"]];
+
+  mtdRows.slice(0, 10).forEach(function(row) {
+    rows.push([
+      row.rank,
+      row.picker,
+      row.score,
+      row.orders,
+      row.items,
+      row.complaints,
+      row.complaintPercent
+    ]);
+  });
+
+  var startRow = GRAPH_LAYOUT.PICKER_ROW;
+  sheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
+  formatDashboardTable_(sheet, startRow, 1, rows.length, rows[0].length, DASHBOARD_THEME.GREEN);
+}
+
+function formatDashboardTable_(sheet, row, column, numRows, numColumns, headerColor) {
+  var range = sheet.getRange(row, column, numRows, numColumns);
+  var backgrounds = [];
+
+  for (var r = 0; r < numRows; r++) {
+    var rowBackgrounds = [];
+    for (var c = 0; c < numColumns; c++) {
+      rowBackgrounds.push(r === 0 ? headerColor : (r % 2 === 0 ? "#1E293B" : DASHBOARD_THEME.CARD));
+    }
+    backgrounds.push(rowBackgrounds);
+  }
+
+  range
+    .setBackgrounds(backgrounds)
+    .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
+    .setFontFamily("Arial")
+    .setFontSize(10)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle")
+    .setWrap(true)
+    .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+
+  sheet.getRange(row, column, 1, numColumns)
+    .setBackground(headerColor)
+    .setFontColor(DASHBOARD_THEME.WHITE)
+    .setFontWeight("bold")
+    .setFontSize(11);
+  sheet.setRowHeights(row, numRows, 32);
+}
+
+function buildDailyPerformanceSummaryRows_(dailyComparisonRows) {
+  return [
+    { metric: "Orders", sourceMetric: "Orders", higherIsBetter: true, valueType: "integer" },
+    { metric: "Items", sourceMetric: "Items", higherIsBetter: true, valueType: "integer" },
+    { metric: "AT", sourceMetric: "Avg AT", higherIsBetter: false, valueType: "decimal" },
+    { metric: "PT", sourceMetric: "Avg PT", higherIsBetter: false, valueType: "decimal" },
+    { metric: "PKT", sourceMetric: "Avg PKT", higherIsBetter: false, valueType: "decimal" },
+    { metric: "P95", sourceMetric: "Avg P95", higherIsBetter: false, valueType: "decimal" },
+    { metric: "Complaints", sourceMetric: "Complaints", higherIsBetter: false, valueType: "integer" }
+  ].map(function(definition) {
+    return buildKpiRow_(definition, dailyComparisonRows);
+  });
+}
+
+function buildProductivityKpiRows_(dailyComparisonRows, latestHourlyRows, comparisonHourlyRows) {
+  var orders = getDailyComparisonValue_(dailyComparisonRows, "Orders");
+  var items = getDailyComparisonValue_(dailyComparisonRows, "Items");
+  var complaints = getDailyComparisonValue_(dailyComparisonRows, "Complaints");
+  var latestHours = getActiveHourCount_(latestHourlyRows);
+  var comparisonHours = getActiveHourCount_(comparisonHourlyRows);
+  var definitions = [
+    {
+      metric: "Orders per Hour",
+      today: latestHours > 0 ? orders.today / latestHours : 0,
+      lastWeek: comparisonHours > 0 ? orders.lastWeek / comparisonHours : 0,
+      higherIsBetter: true,
+      valueType: "decimal"
+    },
+    {
+      metric: "Items per Hour",
+      today: latestHours > 0 ? items.today / latestHours : 0,
+      lastWeek: comparisonHours > 0 ? items.lastWeek / comparisonHours : 0,
+      higherIsBetter: true,
+      valueType: "decimal"
+    },
+    {
+      metric: "Average Items per Order",
+      today: orders.today > 0 ? items.today / orders.today : 0,
+      lastWeek: orders.lastWeek > 0 ? items.lastWeek / orders.lastWeek : 0,
+      higherIsBetter: true,
+      valueType: "decimal"
+    },
+    {
+      metric: "Complaint %",
+      today: orders.today > 0 ? (complaints.today / orders.today) * 100 : 0,
+      lastWeek: orders.lastWeek > 0 ? (complaints.lastWeek / orders.lastWeek) * 100 : 0,
+      higherIsBetter: false,
+      valueType: "percent"
+    }
+  ];
+
+  return definitions.map(function(definition) {
+    return buildKpiFromValues_(definition);
+  });
+}
+
+function buildPeakHourAnalysisRows_(latestHourlyRows, comparisonHourlyRows) {
+  var definitions = [
+    ["Peak Orders Hour", "orders", true, true, "integer"],
+    ["Peak Items Hour", "items", true, true, "integer"],
+    ["Worst AT Hour", "at", true, false, "decimal"],
+    ["Worst PT Hour", "pt", true, false, "decimal"]
+  ];
+  var rows = [["Metric", "Today Hour", "Today Value", "Last Week Hour", "Last Week Value", "Status"]];
+
+  definitions.forEach(function(definition) {
+    var todayPeak = findHourlyExtreme_(latestHourlyRows, definition[1], definition[2]);
+    var lastWeekPeak = findHourlyExtreme_(comparisonHourlyRows, definition[1], definition[2]);
+    var trend = getTrendIndicator_(todayPeak.value - lastWeekPeak.value, definition[3]);
+    rows.push([
+      definition[0],
+      todayPeak.hour === "" ? "-" : todayPeak.hour + ":00",
+      formatKpiValue_(todayPeak.value, definition[4]),
+      lastWeekPeak.hour === "" ? "-" : lastWeekPeak.hour + ":00",
+      formatKpiValue_(lastWeekPeak.value, definition[4]),
+      trend.indicator + " " + trend.status
+    ]);
+  });
+
+  return rows;
+}
+
+function buildHourlyHeatmapRows_(orderMatrix, itemMatrix, performanceRows) {
+  var rows = [["Hour", "LW Orders", "Today Orders", "Order Var", "LW Items", "Today Items", "Item Var", "AT", "PT", "PKT", "P95"]];
+  var performanceByHour = {};
+
+  for (var p = 1; p < performanceRows.length; p++) {
+    performanceByHour[performanceRows[p][0]] = performanceRows[p];
+  }
+
+  for (var i = 1; i < orderMatrix.length; i++) {
+    var hour = orderMatrix[i][0];
+    var perf = performanceByHour[hour] || [hour, 0, 0, 0, 0];
+    rows.push([
+      hour,
+      orderMatrix[i][1],
+      orderMatrix[i][2],
+      orderMatrix[i][3],
+      itemMatrix[i] ? itemMatrix[i][1] : 0,
+      itemMatrix[i] ? itemMatrix[i][2] : 0,
+      itemMatrix[i] ? itemMatrix[i][3] : 0,
+      perf[1],
+      perf[2],
+      perf[3],
+      perf[4]
+    ]);
+  }
+
+  return rows;
+}
+
+function buildKpiRow_(definition, dailyComparisonRows) {
+  var values = getDailyComparisonValue_(dailyComparisonRows, definition.sourceMetric);
+  return buildKpiFromValues_({
+    metric: definition.metric,
+    today: values.today,
+    lastWeek: values.lastWeek,
+    variancePercent: values.variancePercent,
+    higherIsBetter: definition.higherIsBetter,
+    valueType: definition.valueType
+  });
+}
+
+function buildKpiFromValues_(definition) {
+  var difference = definition.today - definition.lastWeek;
+  var variancePercent = definition.variancePercent !== undefined
+    ? definition.variancePercent
+    : definition.lastWeek !== 0
+      ? (difference / definition.lastWeek) * 100
+      : "";
+  var trend = getTrendIndicator_(difference, definition.higherIsBetter);
+
+  return {
+    metric: definition.metric,
+    today: definition.today,
+    lastWeek: definition.lastWeek,
+    difference: difference,
+    variancePercent: variancePercent,
+    todayText: formatKpiValue_(definition.today, definition.valueType),
+    lastWeekText: formatKpiValue_(definition.lastWeek, definition.valueType),
+    varianceText: formatVarianceText_(variancePercent),
+    indicator: trend.indicator,
+    status: trend.status,
+    color: trend.color,
+    background: trend.background
+  };
+}
+
+function getDailyComparisonValue_(dailyComparisonRows, metricName) {
+  var row = getDailyComparisonRow_(dailyComparisonRows, metricName);
+  if (!row) {
+    return {
+      today: 0,
+      lastWeek: 0,
+      difference: 0,
+      variancePercent: ""
+    };
+  }
+
+  return {
+    today: toNumber_(row[2]),
+    lastWeek: toNumber_(row[1]),
+    difference: toNumber_(row[3]),
+    variancePercent: row[4] === "" ? "" : toNumber_(row[4])
+  };
+}
+
+function getDailyComparisonRow_(dailyComparisonRows, metricName) {
+  var target = normalizeForCompare_(metricName);
+
+  for (var i = 1; i < dailyComparisonRows.length; i++) {
+    if (normalizeForCompare_(dailyComparisonRows[i][0]) === target) {
+      return dailyComparisonRows[i];
     }
   }
 
   return null;
 }
 
-function getChartTitle_(chart) {
-  try {
-    return chart.getOptions().get("title") || "";
-  } catch (error) {
-    return "";
+function getTrendIndicator_(difference, higherIsBetter) {
+  if (difference === 0) {
+    return {
+      indicator: "→",
+      status: "Stable",
+      color: DASHBOARD_THEME.SECONDARY_TEXT,
+      background: "#334155",
+      border: "#475569"
+    };
   }
+
+  var improved = higherIsBetter ? difference > 0 : difference < 0;
+
+  return {
+    indicator: difference > 0 ? "▲" : "▼",
+    status: improved ? "Improved" : "Declined",
+    color: improved ? "#A7F3D0" : "#FECACA",
+    background: improved ? "#1F3B2D" : "#4B2E2E",
+    border: improved ? "#355E4A" : "#6B3A3A"
+  };
+}
+
+function isHigherBetterMetric_(metricName) {
+  var normalized = normalizeForCompare_(metricName);
+  return normalized === "orders" ||
+    normalized === "items" ||
+    normalized === "orders per hour" ||
+    normalized === "items per hour" ||
+    normalized === "average items per order";
+}
+
+function buildExecutiveBannerText_(dailySummaryRows) {
+  return dailySummaryRows.map(function(row) {
+    return row.metric + " " + row.indicator + " " + row.varianceText;
+  }).join("   |   ");
+}
+
+function getOverallPerformanceStatus_(dailySummaryRows) {
+  var improved = 0;
+  var declined = 0;
+
+  dailySummaryRows.forEach(function(row) {
+    if (row.status === "Improved") improved++;
+    if (row.status === "Declined") declined++;
+  });
+
+  if (improved > declined) {
+    return {
+      label: "Improved",
+      color: "#14532D"
+    };
+  }
+
+  if (declined > improved) {
+    return {
+      label: "Declined",
+      color: "#7F1D1D"
+    };
+  }
+
+  return {
+    label: "Stable",
+    color: DASHBOARD_THEME.SECTION
+  };
+}
+
+function getActiveHourCount_(hourlyRows) {
+  var count = 0;
+
+  hourlyRows.forEach(function(row) {
+    if (toNumber_(row.orders) > 0 || toNumber_(row.items) > 0) {
+      count++;
+    }
+  });
+
+  return count || hourlyRows.length || 0;
+}
+
+function findHourlyExtreme_(hourlyRows, metricName, highest) {
+  var result = {
+    hour: "",
+    value: 0
+  };
+
+  hourlyRows.forEach(function(row) {
+    var value = toNumber_(row[metricName]);
+    if (value <= 0) return;
+
+    if (result.hour === "" || (highest ? value > result.value : value < result.value)) {
+      result = {
+        hour: row.hour,
+        value: value
+      };
+    }
+  });
+
+  return result;
+}
+
+function buildTopPickerSourceRows_(mtdRows) {
+  return [["Picker", "MTD Score"]].concat(
+    mtdRows.slice(0, 10).map(function(row) {
+      return [row.picker, row.score];
+    })
+  );
+}
+
+function kpiRowsToTable_(kpiRows) {
+  var output = [["Metric", "Today", "Last Week", "Difference", "Variance %", "Status"]];
+
+  kpiRows.forEach(function(row) {
+    output.push([
+      row.metric,
+      row.today,
+      row.lastWeek,
+      row.difference,
+      row.variancePercent,
+      row.indicator + " " + row.status
+    ]);
+  });
+
+  return output;
+}
+
+function getKpiCardColor_(metricName) {
+  var normalized = normalizeForCompare_(metricName);
+
+  if (normalized.indexOf("order") >= 0) return DASHBOARD_THEME.BLUE;
+  if (normalized.indexOf("item") >= 0) return DASHBOARD_THEME.GREEN;
+  if (normalized === "at") return DASHBOARD_THEME.PURPLE;
+  if (normalized === "pt") return DASHBOARD_THEME.ORANGE;
+  if (normalized === "pkt") return DASHBOARD_THEME.CYAN;
+  if (normalized === "p95" || normalized.indexOf("complaint") >= 0) return DASHBOARD_THEME.RED;
+
+  return DASHBOARD_THEME.BLUE;
+}
+
+function applyComparisonCellStyle_(range, status) {
+  var style = getComparisonStyle_(status);
+  range
+    .setBackground(style.background)
+    .setFontColor(style.text)
+    .setFontWeight("bold")
+    .setBorder(true, true, true, true, false, false, style.border, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+}
+
+function getComparisonStyle_(status) {
+  if (status === "Improved") {
+    return {
+      background: "#1F3B2D",
+      text: "#A7F3D0",
+      border: "#355E4A"
+    };
+  }
+
+  if (status === "Declined") {
+    return {
+      background: "#4B2E2E",
+      text: "#FECACA",
+      border: "#6B3A3A"
+    };
+  }
+
+  return {
+    background: "#334155",
+    text: "#CBD5E1",
+    border: "#475569"
+  };
+}
+
+function formatKpiValue_(value, valueType) {
+  if (valueType === "integer") return formatNumber_(Math.round(toNumber_(value)), 0);
+  if (valueType === "percent") return formatNumber_(round2_(toNumber_(value)), 2) + "%";
+  return formatNumber_(round2_(toNumber_(value)), 2);
+}
+
+function formatVarianceText_(variancePercent) {
+  if (variancePercent === "" || variancePercent === null || variancePercent === undefined) return "n/a";
+
+  var value = round2_(toNumber_(variancePercent));
+  return (value > 0 ? "+" : "") + formatNumber_(value, 2) + "%";
+}
+
+function formatNumber_(value, decimals) {
+  var fixed = decimals > 0 ? Number(value).toFixed(decimals) : String(Math.round(Number(value)));
+  var parts = fixed.split(".");
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return parts.join(".");
 }
 
 function buildComplaintIndex_(rcaSheet) {
@@ -1199,10 +2945,186 @@ function readExistingHourlyManualMp_(sheet) {
   return manualMp;
 }
 
+function updateHourlyManpowerCount_(hourlySheet, spreadsheet) {
+  var rosterSheet = ensureShiftRosterSheet_(spreadsheet);
+  var roster = readShiftRoster_(rosterSheet);
+  var pocMapping = getPocMapping_(ensurePocMappingSheet_(spreadsheet));
+  var lastRow = hourlySheet.getLastRow();
+
+  if (lastRow < 2) return;
+
+  var data = hourlySheet.getRange(2, 1, lastRow - 1, 13).getValues();
+  var output = data.map(function(row) {
+    var dateKey = normalizeDate_(row[0]);
+    var hour = extractHourFromValue_(row[1]);
+    var counts = countScheduledRosterForHour_(roster, pocMapping, dateKey, hour);
+
+    row[9] = counts.total;
+    row[10] = counts.Kamal;
+    row[11] = counts.Minhaj;
+    row[12] = counts.Tawhid;
+    return row;
+  });
+
+  hourlySheet.getRange(2, 1, output.length, 13).setValues(output);
+  updateHourlyManpowerTotals_(hourlySheet);
+}
+
+function ensureShiftRosterSheet_(spreadsheet) {
+  var sheet = getOrCreateSheet_(spreadsheet, CONFIG.SHEETS.SHIFT_ROSTER);
+  var header = ["Employee Name", "Weekday", "Shift Start", "Shift End", "Active", "Notes"];
+
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+  } else if (normalizeText_(sheet.getRange(1, 1).getValue()) !== "Employee Name") {
+    sheet.insertRowsBefore(1, 1);
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+  }
+
+  sheet.hideSheet();
+  return sheet;
+}
+
+function readShiftRoster_(sheet) {
+  var rows = [];
+  var data = sheet.getDataRange().getValues();
+
+  for (var i = 1; i < data.length; i++) {
+    var employee = normalizeText_(data[i][0]);
+    var weekday = normalizeWeekday_(data[i][1]);
+    var startHour = parseShiftHour_(data[i][2]);
+    var endHour = parseShiftHour_(data[i][3]);
+    var active = data[i][4] === true || normalizeForCompare_(data[i][4]) === "true" || normalizeText_(data[i][4]) === "1";
+
+    if (!employee || !weekday || startHour === null || endHour === null || !active) continue;
+
+    rows.push({
+      employee: employee,
+      weekday: weekday,
+      startHour: startHour,
+      endHour: endHour
+    });
+  }
+
+  return rows;
+}
+
+function countScheduledRosterForHour_(roster, pocMapping, dateKey, hour) {
+  var counts = {
+    total: 0,
+    Kamal: 0,
+    Minhaj: 0,
+    Tawhid: 0
+  };
+
+  if (!dateKey || hour === null || hour === undefined || normalizeText_(hour) === "Total") return counts;
+
+  var weekday = getWeekdayName_(dateKey);
+
+  roster.forEach(function(shift) {
+    if (!isShiftActiveForHour_(shift, weekday, hour)) return;
+
+    var poc = getPocForPicker_(shift.employee, pocMapping);
+    counts.total++;
+    if (counts[poc] !== undefined) counts[poc]++;
+  });
+
+  return counts;
+}
+
+function isShiftActiveForHour_(shift, weekday, hour) {
+  if (shift.weekday !== weekday) return false;
+
+  if (shift.startHour === shift.endHour) {
+    return true;
+  }
+
+  if (shift.startHour < shift.endHour) {
+    return hour >= shift.startHour && hour < shift.endHour;
+  }
+
+  return hour >= shift.startHour || hour < shift.endHour;
+}
+
+function updateHourlyManpowerTotals_(hourlySheet) {
+  var lastRow = hourlySheet.getLastRow();
+  if (lastRow < 2) return;
+
+  var data = hourlySheet.getRange(2, 1, lastRow - 1, 13).getValues();
+
+  for (var i = 0; i < data.length; i++) {
+    if (normalizeText_(data[i][1]) !== "Total") continue;
+
+    var totals = [0, 0, 0, 0];
+    var count = 0;
+
+    for (var j = i - 24; j < i; j++) {
+      if (j < 0) continue;
+      totals[0] += toNumber_(data[j][9]);
+      totals[1] += toNumber_(data[j][10]);
+      totals[2] += toNumber_(data[j][11]);
+      totals[3] += toNumber_(data[j][12]);
+      count++;
+    }
+
+    data[i][9] = count > 0 ? totals[0] / count : 0;
+    data[i][10] = count > 0 ? totals[1] / count : 0;
+    data[i][11] = count > 0 ? totals[2] / count : 0;
+    data[i][12] = count > 0 ? totals[3] / count : 0;
+  }
+
+  hourlySheet.getRange(2, 1, data.length, 13).setValues(data);
+}
+
+function parseShiftHour_(value) {
+  var hour = extractHourFromValue_(value);
+  if (hour !== null) return hour;
+
+  var text = normalizeText_(value);
+  var match = text.match(/^(\d{1,2})\s*(AM|PM)$/i);
+  if (!match) return null;
+
+  hour = Number(match[1]);
+  var meridiem = match[2].toUpperCase();
+  if (meridiem === "PM" && hour < 12) hour += 12;
+  if (meridiem === "AM" && hour === 12) hour = 0;
+  return hour >= 0 && hour <= 23 ? hour : null;
+}
+
+function normalizeWeekday_(value) {
+  var key = normalizeForCompare_(value);
+  var weekdays = {
+    sunday: "Sunday",
+    sun: "Sunday",
+    monday: "Monday",
+    mon: "Monday",
+    tuesday: "Tuesday",
+    tue: "Tuesday",
+    wednesday: "Wednesday",
+    wed: "Wednesday",
+    thursday: "Thursday",
+    thu: "Thursday",
+    friday: "Friday",
+    fri: "Friday",
+    saturday: "Saturday",
+    sat: "Saturday"
+  };
+
+  return weekdays[key] || "";
+}
+
+function getWeekdayName_(dateKey) {
+  var date = parseDateKey_(dateKey);
+  if (!date) return "";
+
+  return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][date.getDay()];
+}
+
 function formatRdbHourlySheet_(sheet, values, totalRows, hourlyBlocks) {
   if (!values || values.length === 0) return;
 
   sheet.setConditionalFormatRules([]);
+  var columnCount = values[0].length;
 
   var totalRowLookup = {};
   totalRows.forEach(function(rowNumber) {
@@ -1217,13 +3139,13 @@ function formatRdbHourlySheet_(sheet, values, totalRows, hourlyBlocks) {
     var rowBackgrounds = [];
     var rowFontWeights = [];
 
-    for (var c = 0; c < 10; c++) {
+    for (var c = 0; c < columnCount; c++) {
       rowBackgrounds.push("#ffffff");
       rowFontWeights.push("normal");
     }
 
     if (totalRowLookup[rowNumber]) {
-      for (var totalCol = 0; totalCol < 10; totalCol++) {
+      for (var totalCol = 0; totalCol < columnCount; totalCol++) {
         rowBackgrounds[totalCol] = "#fff2cc";
         rowFontWeights[totalCol] = "bold";
       }
@@ -1256,13 +3178,13 @@ function formatRdbHourlySheet_(sheet, values, totalRows, hourlyBlocks) {
     }
   });
 
-  sheet.getRange(1, 1, 1, 10)
+  sheet.getRange(1, 1, 1, columnCount)
     .setBackground("#002060")
     .setFontColor("#ffffff")
     .setFontWeight("bold");
 
   if (values.length > 1) {
-    sheet.getRange(2, 1, values.length - 1, 10)
+    sheet.getRange(2, 1, values.length - 1, columnCount)
       .setBackgrounds(backgrounds)
       .setFontWeights(fontWeights)
       .setFontColor("#000000");
@@ -1729,6 +3651,407 @@ function saveMerchandisingScores_(scores) {
     .setProperty(CONFIG.PROPERTIES.MERCHANDISING_SCORES, JSON.stringify(scores || {}));
 }
 
+function buildComplaintIntelligenceRows_(data, orderContext) {
+  var records = getComplaintRecords_(data);
+  var stats = buildComplaintStats_(records, orderContext);
+  var output = [
+    ["COMPLAINT INTELLIGENCE CENTER"],
+    ["Scope", "All recorded complaints", "Source", CONFIG.SHEETS.RCA_DATABASE, "Generated At", Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss")],
+    [""]
+  ];
+
+  addComplaintSection_(output, "EXECUTIVE COMPLAINT SUMMARY", ["Metric", "Value", "Definition"], [
+    ["Unique Orders With Complaints", stats.uniqueOrdersWithComplaints, "Distinct Order IDs with complaints from " + COMPLAINT_RATE_START_DATE + " onward"],
+    ["Complaint Rate %", formatComplaintPercent_(stats.complaintRate), "Aligned unique complaint orders / aligned total RDB orders"],
+    ["Most Common RCA", stats.topRca.key || "No data", "Highest complaint count RCA"],
+    ["Most Common RCA %", formatComplaintPercent_(stats.topRca.percent), "Share of unique complaint orders"],
+    ["Most Common Complaint Category", stats.topCategory.key || "No data", "Highest complaint count category"],
+    ["Most Common Complaint Category %", formatComplaintPercent_(stats.topCategory.percent), "Share of unique complaint orders"],
+    ["Top Complaint SKU", stats.topSku.key || "No data", stats.topSku.label || ""],
+    ["Top Complaint Picker", stats.topPicker.key || "No data", "Highest complaint count picker"]
+  ]);
+
+  addComplaintSection_(output, "MONTHLY COMPARISON", ["Month", "Complaint Count", "Rate-Eligible Unique Orders Impacted", "Complaint Rate %"],
+    buildComplaintMonthlyRows_(records, orderContext));
+
+  addComplaintSection_(output, "RCA ANALYSIS", ["RCA", "Complaint Count", "RCA Complaint %"],
+    buildComplaintSummaryRows_(stats.rca, false, 0, false, stats.uniqueOrdersWithComplaints));
+
+  addComplaintSection_(output, "COMPLAINT CATEGORY ANALYSIS", ["Complaint Category", "Complaint Count", "Category Complaint %"],
+    buildComplaintSummaryRows_(stats.categories, false, 0, false, stats.uniqueOrdersWithComplaints));
+
+  addComplaintSection_(output, "TOP 5 COMPLAINT SKUs", ["Rank", "SKU", "Complaint Count", "SKU Complaint %"],
+    buildComplaintSummaryRows_(stats.skus, true, 5, false, stats.uniqueOrdersWithComplaints));
+
+  addComplaintSection_(output, "TOP 5 PICKERS BY COMPLAINT COUNT", ["Rank", "Picker", "Complaint Count", "Unique Orders Impacted", "Picker Complaint %"],
+    buildComplaintSummaryRows_(stats.pickers, true, 5, true, stats.uniqueOrdersWithComplaints, orderContext.ordersByPicker));
+
+  addComplaintSection_(output, "TOP 5 CUSTOMERS BY COMPLAINT COUNT", ["Rank", "Customer", "Complaint Count", "Unique Orders Impacted", "Customer Complaint %"],
+    buildComplaintSummaryRows_(stats.customers, true, 5, true, stats.uniqueOrdersWithComplaints));
+
+  addComplaintSection_(output, "TOP 5 DAs BY COMPLAINT COUNT", ["Rank", "DA", "Complaint Count", "Unique Orders Impacted", "DA Complaint %"],
+    buildComplaintSummaryRows_(stats.deliveryAgents, true, 5, true, stats.uniqueOrdersWithComplaints));
+
+  addComplaintSection_(output, "KEY INSIGHTS", ["Insight"], buildComplaintInsightRows_(stats));
+
+  addComplaintSection_(output, "RAW COMPLAINT DATA", data[0] || ["No header"], data.slice(1));
+
+  return output;
+}
+
+function getComplaintOrderContextFromRdb_(rdbData) {
+  var context = {
+    totalOrders: 0,
+    ordersByMonth: {},
+    ordersByPicker: {}
+  };
+
+  for (var i = 1; i < rdbData.length; i++) {
+    var dateKey = normalizeDate_(rdbData[i][0]);
+    var monthKey = getMonthKey_(dateKey);
+    var picker = normalizeText_(rdbData[i][1]);
+    var orders = toNumber_(rdbData[i][3]);
+
+    if (!dateKey || dateKey < COMPLAINT_RATE_START_DATE) continue;
+
+    context.totalOrders += orders;
+    if (monthKey) context.ordersByMonth[monthKey] = (context.ordersByMonth[monthKey] || 0) + orders;
+    if (picker) context.ordersByPicker[picker] = (context.ordersByPicker[picker] || 0) + orders;
+  }
+
+  return context;
+}
+
+function getComplaintRecords_(data) {
+  var records = [];
+
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var orderId = normalizeText_(row[4]);
+
+    if (!orderId && !normalizeDate_(row[0]) && !normalizeText_(row[16]) && !normalizeText_(row[7])) continue;
+
+    records.push({
+      raw: row,
+      dateKey: normalizeDate_(row[0]),
+      monthKey: getMonthKey_(normalizeDate_(row[0])),
+      orderId: orderId,
+      sku: normalizeText_(row[5]),
+      skuName: normalizeText_(row[8]),
+      category: normalizeText_(row[7]),
+      reason: normalizeText_(row[9]),
+      daId: normalizeText_(row[10]),
+      daName: normalizeText_(row[11]),
+      picker: normalizeText_(row[13]),
+      customer: normalizeText_(row[15]),
+      rca: normalizeText_(row[16])
+    });
+  }
+
+  return records;
+}
+
+function buildComplaintStats_(records, orderContext) {
+  var totalComplaints = records.length;
+  var rateRecords = records.filter(function(record) {
+    return record.dateKey && record.dateKey >= COMPLAINT_RATE_START_DATE;
+  });
+  var uniqueOrders = {};
+  var rateStats = {
+    rca: {},
+    categories: {},
+    skus: {},
+    pickers: {},
+    customers: {},
+    deliveryAgents: {}
+  };
+  var stats = {
+    totalComplaints: totalComplaints,
+    rca: {},
+    categories: {},
+    skus: {},
+    pickers: {},
+    customers: {},
+    deliveryAgents: {}
+  };
+
+  records.forEach(function(record) {
+    if (record.orderId) uniqueOrders[record.orderId] = true;
+
+    addComplaintSummaryItem_(stats.rca, record.rca || "Unclassified", "", record.orderId);
+    addComplaintSummaryItem_(stats.categories, record.category || "Unclassified", "", record.orderId);
+    addComplaintSummaryItem_(stats.skus, record.sku || "Unknown SKU", record.skuName, record.orderId);
+    addComplaintSummaryItem_(stats.pickers, record.picker || "Unknown Picker", "", record.orderId);
+    addComplaintSummaryItem_(stats.customers, record.customer || "Unknown Customer", "", record.orderId);
+    addComplaintSummaryItem_(stats.deliveryAgents, record.daId || record.daName || "Unknown DA", record.daName, record.orderId);
+  });
+
+  rateRecords.forEach(function(record) {
+    addComplaintSummaryItem_(rateStats.rca, record.rca || "Unclassified", "", record.orderId);
+    addComplaintSummaryItem_(rateStats.categories, record.category || "Unclassified", "", record.orderId);
+    addComplaintSummaryItem_(rateStats.skus, record.sku || "Unknown SKU", record.skuName, record.orderId);
+    addComplaintSummaryItem_(rateStats.pickers, record.picker || "Unknown Picker", "", record.orderId);
+    addComplaintSummaryItem_(rateStats.customers, record.customer || "Unknown Customer", "", record.orderId);
+    addComplaintSummaryItem_(rateStats.deliveryAgents, record.daId || record.daName || "Unknown DA", record.daName, record.orderId);
+  });
+
+  stats.rateEligibleRecords = rateRecords;
+  stats.uniqueOrdersWithComplaints = getUniqueComplaintOrderCount_(rateRecords);
+  stats.uniqueOrders = stats.uniqueOrdersWithComplaints;
+  stats.totalOrders = toNumber_(orderContext.totalOrders);
+  stats.complaintRate = stats.totalOrders > 0 ? (stats.uniqueOrdersWithComplaints / stats.totalOrders) * 100 : 0;
+  stats.rcaRows = sortComplaintSummary_(stats.rca, stats.uniqueOrdersWithComplaints, null, rateStats.rca);
+  stats.categoryRows = sortComplaintSummary_(stats.categories, stats.uniqueOrdersWithComplaints, null, rateStats.categories);
+  stats.skuRows = sortComplaintSummary_(stats.skus, stats.uniqueOrdersWithComplaints, null, rateStats.skus);
+  stats.pickerRows = sortComplaintSummary_(stats.pickers, stats.uniqueOrdersWithComplaints, orderContext.ordersByPicker, rateStats.pickers);
+  stats.customerRows = sortComplaintSummary_(stats.customers, stats.uniqueOrdersWithComplaints, null, rateStats.customers);
+  stats.daRows = sortComplaintSummary_(stats.deliveryAgents, stats.uniqueOrdersWithComplaints, null, rateStats.deliveryAgents);
+  stats.topRca = stats.rcaRows[0] || {};
+  stats.topCategory = stats.categoryRows[0] || {};
+  stats.topSku = stats.skuRows[0] || {};
+  stats.topPicker = stats.pickerRows[0] || {};
+
+  return stats;
+}
+
+function addComplaintSummaryItem_(summary, key, label, orderId) {
+  if (!summary[key]) {
+    summary[key] = {
+      key: key,
+      label: label || "",
+      count: 0,
+      orders: {}
+    };
+  }
+
+  if (!summary[key].label && label) summary[key].label = label;
+  summary[key].count++;
+  if (orderId) summary[key].orders[orderId] = true;
+}
+
+function getUniqueComplaintOrderCount_(records) {
+  var orders = {};
+
+  records.forEach(function(record) {
+    if (record.orderId) orders[record.orderId] = true;
+  });
+
+  return Object.keys(orders).length;
+}
+
+function sortComplaintSummary_(summary, denominator, denominatorLookup, rateSummary) {
+  return Object.keys(summary).map(function(key) {
+    var uniqueOrders = Object.keys(summary[key].orders).length;
+    var rateUniqueOrders = rateSummary && rateSummary[key]
+      ? Object.keys(rateSummary[key].orders).length
+      : uniqueOrders;
+    var percentDenominator = denominatorLookup ? toNumber_(denominatorLookup[key]) : toNumber_(denominator);
+
+    return {
+      key: key,
+      label: summary[key].label,
+      count: summary[key].count,
+      uniqueOrders: uniqueOrders,
+      rateUniqueOrders: rateUniqueOrders,
+      percent: percentDenominator > 0 ? (rateUniqueOrders / percentDenominator) * 100 : 0
+    };
+  }).sort(function(a, b) {
+    return b.count - a.count || a.key.localeCompare(b.key);
+  });
+}
+
+function buildComplaintMonthlyRows_(records, orderContext) {
+  var months = {};
+
+  records.forEach(function(record) {
+    if (!record.dateKey || record.dateKey < COMPLAINT_RATE_START_DATE) return;
+
+    var monthKey = record.monthKey || "Unknown";
+    if (!months[monthKey]) {
+      months[monthKey] = {
+        count: 0,
+        orders: {}
+      };
+    }
+
+    months[monthKey].count++;
+    if (record.orderId) months[monthKey].orders[record.orderId] = true;
+  });
+
+  return Object.keys(months).sort().map(function(monthKey) {
+    var uniqueOrders = Object.keys(months[monthKey].orders).length;
+    var totalOrders = toNumber_(orderContext.ordersByMonth[monthKey]);
+    return [
+      monthKey,
+      months[monthKey].count,
+      uniqueOrders,
+      totalOrders > 0 ? formatComplaintPercent_((uniqueOrders / totalOrders) * 100) : "n/a"
+    ];
+  });
+}
+
+function buildComplaintSummaryRows_(summary, ranked, limit, includeUniqueOrders, denominator, denominatorLookup) {
+  var rows = sortComplaintSummary_(summary, denominator, denominatorLookup);
+  var limitedRows = limit > 0 ? rows.slice(0, limit) : rows;
+
+  return limitedRows.map(function(row, index) {
+    var name = row.label ? row.key + " - " + row.label : row.key;
+    if (ranked && includeUniqueOrders) {
+      return [index + 1, name, row.count, row.uniqueOrders, formatComplaintPercent_(row.percent)];
+    }
+
+    if (ranked) {
+      return [index + 1, name, row.count, formatComplaintPercent_(row.percent)];
+    }
+
+    return [name, row.count, formatComplaintPercent_(row.percent)];
+  });
+}
+
+function buildComplaintInsightRows_(stats) {
+  var top5SkuOrders = {};
+  stats.skuRows.slice(0, 5).forEach(function(row) {
+    var skuSummary = stats.skus[row.key];
+    Object.keys(skuSummary.orders || {}).forEach(function(orderId) {
+      top5SkuOrders[orderId] = true;
+    });
+  });
+  var rateOrderLookup = {};
+  stats.rateEligibleRecords.forEach(function(record) {
+    if (record.orderId) rateOrderLookup[record.orderId] = true;
+  });
+  var top5SkuUniqueOrders = Object.keys(top5SkuOrders).filter(function(orderId) {
+    return rateOrderLookup[orderId];
+  }).length;
+
+  var topCustomer = stats.customerRows[0] || {};
+  var topPicker = stats.pickerRows[0] || {};
+
+  return [
+    [(stats.topCategory.key || "No category") + " contributes " + formatComplaintPercent_(stats.topCategory.percent || 0) + " of unique complaint orders."],
+    [(stats.topRca.key || "No RCA") + " contributes " + formatComplaintPercent_(stats.topRca.percent || 0) + " of unique complaint orders."],
+    ["Top 5 SKUs contribute " + formatComplaintPercent_(stats.uniqueOrdersWithComplaints > 0 ? (top5SkuUniqueOrders / stats.uniqueOrdersWithComplaints) * 100 : 0) + " of unique complaint orders."],
+    ["Complaint Rate is " + formatComplaintPercent_(stats.complaintRate) + " based on unique complaint orders from " + COMPLAINT_RATE_START_DATE + " onward over aligned RDB orders."],
+    ["Most impacted customer has " + (topCustomer.uniqueOrders || 0) + " unique complaint orders."],
+    ["Most impacted picker has " + ((topPicker && topPicker.uniqueOrders) || 0) + " unique complaint orders."]
+  ];
+}
+
+function addComplaintSection_(output, title, header, rows) {
+  output.push([title]);
+  output.push(header);
+
+  if (!rows || rows.length === 0) {
+    output.push(["No data"]);
+  } else {
+    rows.forEach(function(row) {
+      output.push(row);
+    });
+  }
+
+  output.push([""]);
+}
+
+function formatComplaintPercent_(value) {
+  return formatNumber_(round2_(toNumber_(value)), 2) + "%";
+}
+
+function formatComplaintIntelligenceSheet_(sheet, rows) {
+  if (!rows || rows.length === 0) return;
+
+  var maxColumns = getMaxRowWidth_(rows);
+  var rowCount = rows.length;
+  ensureSheetSize_(sheet, rowCount + 2, maxColumns + 1);
+
+  var usedRange = sheet.getRange(1, 1, rowCount, maxColumns);
+  usedRange
+    .setBackground(DASHBOARD_THEME.BACKGROUND)
+    .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
+    .setFontFamily("Arial")
+    .setFontSize(10)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle")
+    .setWrap(true)
+    .setBorder(false, false, false, false, false, false);
+
+  sheet.setFrozenRows(1);
+  sheet.setHiddenGridlines(true);
+  sheet.setTabColor(DASHBOARD_THEME.BACKGROUND);
+  sheet.setRowHeights(1, rowCount, 32);
+
+  sheet.getRange(1, 1, 1, maxColumns)
+    .merge()
+    .setBackground(DASHBOARD_THEME.NAVY)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold")
+    .setFontSize(22)
+    .setHorizontalAlignment("center");
+  sheet.setRowHeight(1, 44);
+
+  for (var i = 1; i < rows.length; i++) {
+    if (isBlankRow_(rows[i])) continue;
+
+    if (isComplaintSectionTitleRow_(rows, i)) {
+      var endIndex = i;
+      while (endIndex + 1 < rows.length && !isBlankRow_(rows[endIndex + 1])) {
+        endIndex++;
+      }
+
+      formatComplaintSectionRange_(sheet, rows, i + 1, endIndex + 1, maxColumns);
+      i = endIndex;
+    }
+  }
+
+  sheet.autoResizeColumns(1, Math.min(maxColumns, 15));
+}
+
+function isComplaintSectionTitleRow_(rows, rowIndex) {
+  if (rowIndex + 1 >= rows.length) return false;
+  if (isBlankRow_(rows[rowIndex])) return false;
+  return !isBlankRow_(rows[rowIndex + 1]);
+}
+
+function formatComplaintSectionRange_(sheet, rows, startRow, endRow, maxColumns) {
+  var rowCount = endRow - startRow + 1;
+
+  sheet.getRange(startRow, 1, rowCount, maxColumns)
+    .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+
+  sheet.getRange(startRow, 1, 1, maxColumns)
+    .setBackground(DASHBOARD_THEME.SECTION)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold")
+    .setFontSize(15);
+  sheet.setRowHeight(startRow, 38);
+
+  if (rowCount > 1) {
+    sheet.getRange(startRow + 1, 1, 1, maxColumns)
+      .setBackground(DASHBOARD_THEME.SECTION)
+      .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+      .setFontWeight("bold")
+      .setFontSize(11);
+  }
+
+  if (rowCount > 2) {
+    var bodyRows = rowCount - 2;
+    var backgrounds = [];
+    for (var r = 0; r < bodyRows; r++) {
+      var rowBackgrounds = [];
+      for (var c = 0; c < maxColumns; c++) {
+        rowBackgrounds.push(r % 2 === 0 ? DASHBOARD_THEME.CARD : "#1E293B");
+      }
+      backgrounds.push(rowBackgrounds);
+    }
+
+    sheet.getRange(startRow + 2, 1, bodyRows, maxColumns)
+      .setBackgrounds(backgrounds)
+      .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
+      .setFontSize(10)
+      .setFontWeight("normal")
+      .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  }
+}
+
 function buildTopList_(data, options) {
   var summary = {};
   var allowedValues = buildAllowedValues_(options.filterValues);
@@ -2152,8 +4475,8 @@ function formatWeeklyAnalyticsSheet_(sheet, rows) {
 
   var usedRange = sheet.getRange(1, 1, rowCount, maxColumns);
   usedRange
-    .setBackground("#ffffff")
-    .setFontColor("#000000")
+    .setBackground(DASHBOARD_THEME.BACKGROUND)
+    .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
     .setFontWeight("normal")
     .setFontSize(10)
     .setHorizontalAlignment("center")
@@ -2164,7 +4487,8 @@ function formatWeeklyAnalyticsSheet_(sheet, rows) {
 
   sheet.setFrozenRows(1);
   sheet.setHiddenGridlines(true);
-  sheet.setRowHeights(1, rowCount, 28);
+  sheet.setTabColor(DASHBOARD_THEME.BACKGROUND);
+  sheet.setRowHeights(1, rowCount, 32);
 
   for (var i = 0; i < rows.length; i++) {
     if (isBlankRow_(rows[i])) continue;
@@ -2202,37 +4526,52 @@ function formatWeeklyTableRange_(sheet, startRow, endRow, maxColumns, isWeekHead
     .setHorizontalAlignment("center")
     .setVerticalAlignment("middle")
     .setWrap(true)
-    .setBorder(true, true, true, true, true, true, "#0b1f3a", SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+    .setFontFamily("Arial")
+    .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
 
   if (isWeekHeader) {
     range
-      .setBackground("#0b1f3a")
-      .setFontColor("#ffffff")
+      .setBackground(DASHBOARD_THEME.NAVY)
+      .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
       .setFontWeight("bold")
       .setFontSize(12);
-    sheet.setRowHeight(startRow, 34);
+    sheet.setRowHeight(startRow, 40);
     return;
   }
 
   sheet.getRange(startRow, 1, 1, maxColumns)
-    .setBackground("#0b1f3a")
-    .setFontColor("#ffffff")
+    .setBackground(DASHBOARD_THEME.SECTION)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
     .setFontWeight("bold")
-    .setFontSize(11);
+    .setFontSize(15);
+  sheet.setRowHeight(startRow, 38);
 
   if (rowCount > 1) {
     sheet.getRange(startRow + 1, 1, 1, maxColumns)
-      .setBackground("#1f4e79")
-      .setFontColor("#ffffff")
-      .setFontWeight("bold");
+      .setBackground(DASHBOARD_THEME.SECTION)
+      .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+      .setFontWeight("bold")
+      .setFontSize(11);
   }
 
   if (rowCount > 2) {
-    sheet.getRange(startRow + 2, 1, rowCount - 2, maxColumns)
-      .setBackground("#edf2f7")
-      .setFontColor("#0f172a")
+    var bodyRange = sheet.getRange(startRow + 2, 1, rowCount - 2, maxColumns);
+    var backgrounds = [];
+
+    for (var r = 0; r < rowCount - 2; r++) {
+      var rowBackgrounds = [];
+      for (var c = 0; c < maxColumns; c++) {
+        rowBackgrounds.push(r % 2 === 0 ? DASHBOARD_THEME.CARD : "#1E293B");
+      }
+      backgrounds.push(rowBackgrounds);
+    }
+
+    bodyRange
+      .setBackgrounds(backgrounds)
+      .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
       .setFontWeight("normal")
-      .setBorder(true, true, true, true, true, true, "#cbd5e1", SpreadsheetApp.BorderStyle.SOLID);
+      .setFontSize(10)
+      .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID);
   }
 }
 
