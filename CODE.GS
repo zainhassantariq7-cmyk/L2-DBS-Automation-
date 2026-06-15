@@ -73,6 +73,8 @@ var DEFAULT_POC_MAPPINGS = [
   ["Tushar Imran", "Emamul Hok", "Minhaj", "Minhaj Team", true],
   ["Md Shimul", "Md Shimul", "Minhaj", "Minhaj Team", true],
   ["Sunbim Sarid Moon", "Sunbim Sarid Moon", "Minhaj", "Minhaj Team", true],
+  ["Sunbim Sarit", "Sunbim Sarid Moon", "Minhaj", "Minhaj Team", true],
+  ["Yusuf Chowdhury", "Sunbim Sarid Moon", "Minhaj", "Minhaj Team", true],
   ["Md Apon Ahmed", "Md Apon Ahmed", "Minhaj", "Minhaj Team", true],
   ["Mohammad Tutul", "Md Apon Ahmed", "Minhaj", "Minhaj Team", true],
   ["Md Tawhid", "Md Tawhid", "Tawhid", "Tawhid Team", true],
@@ -80,7 +82,8 @@ var DEFAULT_POC_MAPPINGS = [
   ["Zain Hassan", "Jabbarul Islam", "Tawhid", "Tawhid Team", true],
   ["Saikat Sohhain Bhuiyan", "Saikat Sohhain Bhuiyan", "Tawhid", "Tawhid Team", true],
   ["SAIKAT SOHHAIN", "Saikat Sohhain Bhuiyan", "Tawhid", "Tawhid Team", true],
-  ["Md Saidur", "Saikat Sohhain Bhuiyan", "Tawhid", "Tawhid Team", true]
+  ["Md Saidur", "Saikat Sohhain Bhuiyan", "Tawhid", "Tawhid Team", true],
+  ["Asik Mia", "Saikat Sohhain Bhuiyan", "Tawhid", "Tawhid Team", true]
 ];
 
 var POC_SCORE_WEIGHTS = {
