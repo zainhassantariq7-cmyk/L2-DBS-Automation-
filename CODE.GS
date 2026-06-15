@@ -25,7 +25,8 @@ var CONFIG = {
     DARK_STORE_DATA: "DARK_STORE_DATA",
     POC_MAPPING: "POC_MAPPING",
     POC_MANUAL_INPUT: "POC_MANUAL_INPUT",
-    POC_SCORECARD: "POC_SCORECARD"
+    POC_SCORECARD: "POC_SCORECARD",
+    SHIFT_ROSTER: "SHIFT_ROSTER"
   },
 
   PROPERTIES: {
@@ -327,7 +328,6 @@ function updateRdbHourly() {
   var sourceSS = SpreadsheetApp.openById(CONFIG.SOURCE_ID);
   var destSS = SpreadsheetApp.openById(CONFIG.DEST_ID);
   var hourlySheet = getOrCreateSheet_(destSS, CONFIG.SHEETS.RDB_HOURLY);
-  var manualMp = readExistingHourlyManualMp_(hourlySheet);
   var summary = buildHourlySummary_(sourceSS);
   var output = [
     [
@@ -340,7 +340,10 @@ function updateRdbHourly() {
       "PT",
       "PKT",
       "P95",
-      "MP"
+      "Manpower Count",
+      "Kamal Team Count",
+      "Minhaj Team Count",
+      "Tawhid Team Count"
     ]
   ];
   var dateKeys = Object.keys(summary).sort();
@@ -349,25 +352,13 @@ function updateRdbHourly() {
 
   dateKeys.forEach(function(dateKey) {
     var dateTotals = createHourlyBucket_();
-    var mpTotal = 0;
-    var mpCount = 0;
     var hourlyStartRow = output.length + 1;
 
     for (var hour = 0; hour < 24; hour++) {
       var bucket = summary[dateKey][hour];
       var orderCount = Object.keys(bucket.orders).length;
-      var manualValue = manualMp[makeHourlyKey_(dateKey, hour)];
 
       addBucketToTotal_(dateTotals, bucket);
-
-      if (manualValue !== "" && manualValue !== undefined) {
-        var mpNumber = Number(manualValue);
-
-        if (!isNaN(mpNumber)) {
-          mpTotal += mpNumber;
-          mpCount++;
-        }
-      }
 
       output.push([
         dateKey,
@@ -379,7 +370,10 @@ function updateRdbHourly() {
         bucket.itemCount > 0 ? bucket.totalPicking / bucket.itemCount : 0,
         bucket.itemCount > 0 ? bucket.totalPacking / bucket.itemCount : 0,
         orderCount > 0 ? (bucket.totalFulfillment / orderCount) / 60 : 0,
-        manualValue === undefined ? "" : manualValue
+        0,
+        0,
+        0,
+        0
       ]);
     }
 
@@ -401,12 +395,17 @@ function updateRdbHourly() {
       dateTotals.itemCount > 0 ? dateTotals.totalPicking / dateTotals.itemCount : 0,
       dateTotals.itemCount > 0 ? dateTotals.totalPacking / dateTotals.itemCount : 0,
       totalOrderCount > 0 ? (dateTotals.totalFulfillment / totalOrderCount) / 60 : 0,
-      mpCount > 0 ? mpTotal / mpCount : ""
+      0,
+      0,
+      0,
+      0
     ]);
   });
 
-  clearSheetContents_(hourlySheet, 1, 1, Math.max(hourlySheet.getLastRow(), 1), Math.max(hourlySheet.getLastColumn(), 10));
+  clearSheetContents_(hourlySheet, 1, 1, Math.max(hourlySheet.getLastRow(), 1), Math.max(hourlySheet.getLastColumn(), 13));
   writePaddedRows_(hourlySheet, 1, 1, output);
+  updateHourlyManpowerCount_(hourlySheet, destSS);
+  output = hourlySheet.getRange(1, 1, hourlySheet.getLastRow(), 13).getValues();
   formatRdbHourlySheet_(hourlySheet, output, totalRows, hourlyBlocks);
 }
 
@@ -2946,10 +2945,194 @@ function readExistingHourlyManualMp_(sheet) {
   return manualMp;
 }
 
+function updateHourlyManpowerCount_(hourlySheet, spreadsheet) {
+  var rosterSheet = ensureShiftRosterSheet_(spreadsheet);
+  var roster = readShiftRoster_(rosterSheet);
+  var pocMapping = getPocMapping_(ensurePocMappingSheet_(spreadsheet));
+  var lastRow = hourlySheet.getLastRow();
+
+  if (lastRow < 2) return;
+
+  var data = hourlySheet.getRange(2, 1, lastRow - 1, 13).getValues();
+  var output = data.map(function(row) {
+    var dateKey = normalizeDate_(row[0]);
+    var hour = extractHourFromValue_(row[1]);
+    var counts = countScheduledRosterForHour_(roster, pocMapping, dateKey, hour);
+
+    row[9] = counts.total;
+    row[10] = counts.Kamal;
+    row[11] = counts.Minhaj;
+    row[12] = counts.Tawhid;
+    return row;
+  });
+
+  hourlySheet.getRange(2, 1, output.length, 13).setValues(output);
+  updateHourlyManpowerTotals_(hourlySheet);
+}
+
+function ensureShiftRosterSheet_(spreadsheet) {
+  var sheet = getOrCreateSheet_(spreadsheet, CONFIG.SHEETS.SHIFT_ROSTER);
+  var header = ["Employee Name", "Weekday", "Shift Start", "Shift End", "Active", "Notes"];
+
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+  } else if (normalizeText_(sheet.getRange(1, 1).getValue()) !== "Employee Name") {
+    sheet.insertRowsBefore(1, 1);
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+  }
+
+  sheet.hideSheet();
+  return sheet;
+}
+
+function readShiftRoster_(sheet) {
+  var rows = [];
+  var data = sheet.getDataRange().getValues();
+
+  for (var i = 1; i < data.length; i++) {
+    var employee = normalizeText_(data[i][0]);
+    var weekday = normalizeWeekday_(data[i][1]);
+    var startHour = parseShiftHour_(data[i][2]);
+    var endHour = parseShiftHour_(data[i][3]);
+    var active = data[i][4] === true || normalizeForCompare_(data[i][4]) === "true" || normalizeText_(data[i][4]) === "1";
+
+    if (!employee || !weekday || startHour === null || endHour === null || !active) continue;
+
+    rows.push({
+      employee: employee,
+      weekday: weekday,
+      startHour: startHour,
+      endHour: endHour
+    });
+  }
+
+  return rows;
+}
+
+function countScheduledRosterForHour_(roster, pocMapping, dateKey, hour) {
+  var counts = {
+    total: 0,
+    Kamal: 0,
+    Minhaj: 0,
+    Tawhid: 0
+  };
+
+  if (!dateKey || hour === null || hour === undefined || normalizeText_(hour) === "Total") return counts;
+
+  var weekday = getWeekdayName_(dateKey);
+  var previousWeekday = getPreviousWeekdayName_(dateKey);
+
+  roster.forEach(function(shift) {
+    if (!isShiftActiveForHour_(shift, weekday, previousWeekday, hour)) return;
+
+    var poc = getPocForPicker_(shift.employee, pocMapping);
+    counts.total++;
+    if (counts[poc] !== undefined) counts[poc]++;
+  });
+
+  return counts;
+}
+
+function isShiftActiveForHour_(shift, weekday, previousWeekday, hour) {
+  if (shift.startHour === shift.endHour) {
+    return shift.weekday === weekday;
+  }
+
+  if (shift.startHour < shift.endHour) {
+    return shift.weekday === weekday && hour >= shift.startHour && hour < shift.endHour;
+  }
+
+  return (shift.weekday === weekday && hour >= shift.startHour) ||
+    (shift.weekday === previousWeekday && hour < shift.endHour);
+}
+
+function updateHourlyManpowerTotals_(hourlySheet) {
+  var lastRow = hourlySheet.getLastRow();
+  if (lastRow < 2) return;
+
+  var data = hourlySheet.getRange(2, 1, lastRow - 1, 13).getValues();
+
+  for (var i = 0; i < data.length; i++) {
+    if (normalizeText_(data[i][1]) !== "Total") continue;
+
+    var totals = [0, 0, 0, 0];
+    var count = 0;
+
+    for (var j = i - 24; j < i; j++) {
+      if (j < 0) continue;
+      totals[0] += toNumber_(data[j][9]);
+      totals[1] += toNumber_(data[j][10]);
+      totals[2] += toNumber_(data[j][11]);
+      totals[3] += toNumber_(data[j][12]);
+      count++;
+    }
+
+    data[i][9] = count > 0 ? totals[0] / count : 0;
+    data[i][10] = count > 0 ? totals[1] / count : 0;
+    data[i][11] = count > 0 ? totals[2] / count : 0;
+    data[i][12] = count > 0 ? totals[3] / count : 0;
+  }
+
+  hourlySheet.getRange(2, 1, data.length, 13).setValues(data);
+}
+
+function parseShiftHour_(value) {
+  var hour = extractHourFromValue_(value);
+  if (hour !== null) return hour;
+
+  var text = normalizeText_(value);
+  var match = text.match(/^(\d{1,2})\s*(AM|PM)$/i);
+  if (!match) return null;
+
+  hour = Number(match[1]);
+  var meridiem = match[2].toUpperCase();
+  if (meridiem === "PM" && hour < 12) hour += 12;
+  if (meridiem === "AM" && hour === 12) hour = 0;
+  return hour >= 0 && hour <= 23 ? hour : null;
+}
+
+function normalizeWeekday_(value) {
+  var key = normalizeForCompare_(value);
+  var weekdays = {
+    sunday: "Sunday",
+    sun: "Sunday",
+    monday: "Monday",
+    mon: "Monday",
+    tuesday: "Tuesday",
+    tue: "Tuesday",
+    wednesday: "Wednesday",
+    wed: "Wednesday",
+    thursday: "Thursday",
+    thu: "Thursday",
+    friday: "Friday",
+    fri: "Friday",
+    saturday: "Saturday",
+    sat: "Saturday"
+  };
+
+  return weekdays[key] || "";
+}
+
+function getWeekdayName_(dateKey) {
+  var date = parseDateKey_(dateKey);
+  if (!date) return "";
+
+  return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][date.getDay()];
+}
+
+function getPreviousWeekdayName_(dateKey) {
+  var date = parseDateKey_(dateKey);
+  if (!date) return "";
+
+  date.setDate(date.getDate() - 1);
+  return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][date.getDay()];
+}
+
 function formatRdbHourlySheet_(sheet, values, totalRows, hourlyBlocks) {
   if (!values || values.length === 0) return;
 
   sheet.setConditionalFormatRules([]);
+  var columnCount = values[0].length;
 
   var totalRowLookup = {};
   totalRows.forEach(function(rowNumber) {
@@ -2964,13 +3147,13 @@ function formatRdbHourlySheet_(sheet, values, totalRows, hourlyBlocks) {
     var rowBackgrounds = [];
     var rowFontWeights = [];
 
-    for (var c = 0; c < 10; c++) {
+    for (var c = 0; c < columnCount; c++) {
       rowBackgrounds.push("#ffffff");
       rowFontWeights.push("normal");
     }
 
     if (totalRowLookup[rowNumber]) {
-      for (var totalCol = 0; totalCol < 10; totalCol++) {
+      for (var totalCol = 0; totalCol < columnCount; totalCol++) {
         rowBackgrounds[totalCol] = "#fff2cc";
         rowFontWeights[totalCol] = "bold";
       }
@@ -3003,13 +3186,13 @@ function formatRdbHourlySheet_(sheet, values, totalRows, hourlyBlocks) {
     }
   });
 
-  sheet.getRange(1, 1, 1, 10)
+  sheet.getRange(1, 1, 1, columnCount)
     .setBackground("#002060")
     .setFontColor("#ffffff")
     .setFontWeight("bold");
 
   if (values.length > 1) {
-    sheet.getRange(2, 1, values.length - 1, 10)
+    sheet.getRange(2, 1, values.length - 1, columnCount)
       .setBackgrounds(backgrounds)
       .setFontWeights(fontWeights)
       .setFontColor("#000000");
