@@ -13,6 +13,9 @@ var CONFIG = {
   SOURCE_ID: "1JgoGkQI2UnY8YtLW9hIY-ltiM9-zGdpUhGp4VVC0Z3w",
   DEST_ID: "1fzm2CVWE8bJed1_OZOsBuMiAZz9E5f4p6QZFXk-0N2c",
   RCA_ID: "1FRvGqkmuA0irw8L5fJv8Q9aCoQH5ViC-eXys9XDAbMo",
+  BAU_SOURCE_ID: "1tsolH7eezhIbe5rUgzrROIfh18q6ym_XdXao48R2ra8",
+  BAU_SOURCE_SHEET: "Metrics View D-1",
+  BAU_DS_CODE: "RUHDS48",
 
   SHEETS: {
     RDB: "RDB",
@@ -22,7 +25,10 @@ var CONFIG = {
     RCA_DATABASE: "YEARLY_RCA_DATABASE",
     WEEKLY_ANALYTICS: "Weekly Analytics",
     DARK_STORE_GRAPHS: "Dark Store Graphs",
-    DARK_STORE_DATA: "DARK_STORE_DATA"
+    DARK_STORE_DATA: "DARK_STORE_DATA",
+    BAU_LIVE: "BAU_LIVE",
+    BAU_HISTORY: "BAU_HISTORY",
+    BAU_RAW: "BAU_RAW"
   },
 
   PROPERTIES: {
@@ -43,6 +49,21 @@ var CONFIG = {
     "jabbarul islam": "Jabbarul Islam"
   }
 };
+
+var BAU_METRICS = [
+  "Offload AM",
+  "Offload CHL",
+  "Offload FZR",
+  "Offload UF",
+  "Putaway AM",
+  "Putaway CHL",
+  "Putaway FZR",
+  "Putaway UF",
+  "FSQ",
+  "Expiry Adherence",
+  "Chiller Movement",
+  "Cycle Count"
+];
 
 var GRAPH_LAYOUT = {
   DASHBOARD_MIN_ROWS: 130,
@@ -109,6 +130,7 @@ function runAll() {
   updateMTDDashboard();
   updateComplaintAnalysis();
   updateWeeklyAnalytics();
+  updateBauTracking();
   updateDarkStoreDashboard();
 }
 
@@ -515,6 +537,381 @@ function updateWeeklyAnalytics() {
   });
 
   writeWeeklyAnalyticsBlocks_(weeklySheet, blocks);
+}
+
+function updateBauTracking() {
+  var sourceSS = SpreadsheetApp.openById(CONFIG.BAU_SOURCE_ID);
+  var destSS = SpreadsheetApp.openById(CONFIG.DEST_ID);
+  var sourceSheet = getRequiredSheet_(sourceSS, CONFIG.BAU_SOURCE_SHEET);
+  var liveSheet = getOrCreateSheet_(destSS, CONFIG.SHEETS.BAU_LIVE);
+  var historySheet = getOrCreateSheet_(destSS, CONFIG.SHEETS.BAU_HISTORY);
+  var rawSheet = getOrCreateSheet_(destSS, CONFIG.SHEETS.BAU_RAW);
+  var sourceData = sourceSheet.getDataRange().getValues();
+  var bauData = buildBauSnapshotFromSource_(sourceData);
+
+  writeBauRaw_(rawSheet, bauData.rawRows);
+  upsertBauHistory_(historySheet, bauData.snapshot);
+  renderBauLiveDashboard_(liveSheet, historySheet.getDataRange().getValues());
+}
+
+function buildBauSnapshotFromSource_(sourceData) {
+  if (!sourceData || sourceData.length < 1) {
+    throw new Error("BAU source sheet is empty.");
+  }
+
+  var header = sourceData[0].map(function(value) {
+    return normalizeText_(value);
+  });
+  var columnMap = buildHeaderColumnMap_(header);
+  var dsColumn = getRequiredColumnIndex_(columnMap, "DS Code");
+  var metricColumns = BAU_METRICS.map(function(metric) {
+    return {
+      metric: metric,
+      column: getRequiredColumnIndex_(columnMap, metric)
+    };
+  });
+  var matchedRows = [];
+
+  for (var i = 1; i < sourceData.length; i++) {
+    if (normalizeText_(sourceData[i][dsColumn]) === CONFIG.BAU_DS_CODE) {
+      matchedRows.push(sourceData[i]);
+    }
+  }
+
+  if (matchedRows.length === 0) {
+    throw new Error("No BAU source row found for DS Code: " + CONFIG.BAU_DS_CODE);
+  }
+
+  var snapshotDate = formatDateKey_(new Date());
+  var updatedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+  var snapshot = [snapshotDate, updatedAt, CONFIG.BAU_DS_CODE];
+
+  metricColumns.forEach(function(metricColumn) {
+    snapshot.push(calculateBauMetricAverage_(matchedRows, metricColumn.column));
+  });
+
+  return {
+    rawRows: [header].concat(matchedRows),
+    snapshot: snapshot
+  };
+}
+
+function writeBauRaw_(sheet, rawRows) {
+  sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).breakApart();
+  sheet.clear();
+  ensureSheetSize_(sheet, Math.max(rawRows.length + 2, 5), Math.max(rawRows[0].length + 1, 5));
+  writePaddedRows_(sheet, 1, 1, rawRows);
+  sheet.hideSheet();
+}
+
+function upsertBauHistory_(sheet, snapshot) {
+  var header = ["Snapshot Date", "Updated At", "DS Code"].concat(BAU_METRICS);
+  var lastRow = sheet.getLastRow();
+  var data = lastRow > 0
+    ? sheet.getRange(1, 1, lastRow, Math.max(sheet.getLastColumn(), header.length)).getValues()
+    : [];
+  var snapshotDate = snapshot[0];
+  var targetRow = 0;
+
+  if (data.length === 0 || normalizeText_(data[0][0]) !== "Snapshot Date") {
+    if (data.length > 0) {
+      sheet.insertRowsBefore(1, 1);
+    }
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+    data = [header].concat(data);
+  }
+
+  for (var i = 1; i < data.length; i++) {
+    if (normalizeDate_(data[i][0]) === snapshotDate || normalizeText_(data[i][0]) === snapshotDate) {
+      targetRow = i + 1;
+      break;
+    }
+  }
+
+  if (targetRow > 0) {
+    sheet.getRange(targetRow, 1, 1, header.length).setValues([snapshot]);
+  } else {
+    sheet.getRange(sheet.getLastRow() + 1, 1, 1, header.length).setValues([snapshot]);
+  }
+
+  formatBauHistorySheet_(sheet);
+}
+
+function renderBauLiveDashboard_(sheet, historyData) {
+  var historyRows = getBauHistoryRows_(historyData);
+  var todayKey = formatDateKey_(new Date());
+  var currentMonthKey = getMonthKey_(todayKey);
+  var todayRow = getLatestBauHistoryRow_(historyRows);
+  var monthRows = historyRows.filter(function(row) {
+    return getMonthKey_(row.dateKey) === currentMonthKey;
+  });
+
+  sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).breakApart();
+  sheet.clear();
+  ensureSheetSize_(sheet, 80, 14);
+  sheet.setHiddenGridlines(true);
+  sheet.setFrozenRows(5);
+  sheet.setTabColor(DASHBOARD_THEME.BACKGROUND);
+  sheet.setColumnWidths(1, 14, 126);
+  sheet.getRange(1, 1, 80, 14)
+    .setBackground(DASHBOARD_THEME.BACKGROUND)
+    .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
+    .setFontFamily("Arial");
+
+  renderBauHeader_(sheet, todayRow, currentMonthKey);
+  renderBauSummaryCards_(sheet, todayRow, monthRows);
+  renderBauMissedTracker_(sheet, todayRow);
+  renderBauMtdAdherence_(sheet, monthRows);
+}
+
+function renderBauHeader_(sheet, todayRow, currentMonthKey) {
+  var refreshedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+  var latestDate = todayRow ? todayRow.dateKey : "-";
+
+  sheet.getRange("A1:N1")
+    .merge()
+    .setValue("RUHDS48 BAU TRACKING DASHBOARD")
+    .setBackground(DASHBOARD_THEME.NAVY)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold")
+    .setFontSize(24)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+  sheet.getRange("A2:N2")
+    .merge()
+    .setValue("Target: 100% for every BAU KPI     Current Month: " + currentMonthKey + "     Latest Snapshot: " + latestDate + "     Last Refresh: " + refreshedAt)
+    .setBackground(DASHBOARD_THEME.SECTION)
+    .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT)
+    .setFontWeight("bold")
+    .setFontSize(13)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+  sheet.setRowHeights(1, 2, 42);
+}
+
+function renderBauSummaryCards_(sheet, todayRow, monthRows) {
+  var todayAdherence = todayRow ? calculateBauRowAverage_(todayRow) : 0;
+  var monthAdherence = calculateBauMonthAverage_(monthRows);
+  var missedCount = todayRow ? getMissedBauMetrics_(todayRow).length : 0;
+  var cards = [
+    ["Today's Adherence", formatComplaintPercent_(todayAdherence), todayAdherence >= 100 ? "On Target" : "Below Target"],
+    ["Current Month Adherence", formatComplaintPercent_(monthAdherence), monthAdherence >= 100 ? "On Target" : "Below Target"],
+    ["Missed BAU Count", missedCount, missedCount === 0 ? "No Misses" : "Action Required"],
+    ["Historical Snapshots", monthRows.length, "Current Month Records"]
+  ];
+
+  cards.forEach(function(card, index) {
+    var column = 1 + (index * 3);
+    var range = sheet.getRange(4, column, 4, 3);
+    range
+      .setBackground(DASHBOARD_THEME.CARD)
+      .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID_MEDIUM)
+      .setHorizontalAlignment("center")
+      .setVerticalAlignment("middle")
+      .setWrap(true);
+    sheet.getRange(4, column, 1, 3).merge()
+      .setValue(card[0])
+      .setBackground(DASHBOARD_THEME.SECTION)
+      .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+      .setFontWeight("bold")
+      .setFontSize(11);
+    sheet.getRange(5, column, 2, 3).merge()
+      .setValue(card[1])
+      .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+      .setFontWeight("bold")
+      .setFontSize(18);
+    sheet.getRange(7, column, 1, 3).merge()
+      .setValue(card[2])
+      .setBackground(card[2] === "Action Required" || card[2] === "Below Target" ? "#4B2E2E" : "#1F3B2D")
+      .setFontColor(card[2] === "Action Required" || card[2] === "Below Target" ? "#FECACA" : "#A7F3D0")
+      .setFontWeight("bold")
+      .setFontSize(11);
+  });
+}
+
+function renderBauMissedTracker_(sheet, todayRow) {
+  renderDashboardSectionTitle_(sheet, 10, 1, 7, "MISSED BAU TRACKER", DASHBOARD_THEME.RED);
+  var rows = [["KPI", "Today", "Target", "Status"]];
+  var missed = todayRow ? getMissedBauMetrics_(todayRow) : [];
+
+  if (missed.length === 0) {
+    rows.push(["All KPIs", "100%", "100%", "On Target"]);
+  } else {
+    missed.forEach(function(metric) {
+      rows.push([metric.metric, formatComplaintPercent_(metric.value), "100%", "Missed"]);
+    });
+  }
+
+  sheet.getRange(12, 1, rows.length, rows[0].length).setValues(rows);
+  formatDashboardTable_(sheet, 12, 1, rows.length, rows[0].length, DASHBOARD_THEME.SECTION);
+
+  for (var i = 1; i < rows.length; i++) {
+    applyComparisonCellStyle_(sheet.getRange(12 + i, 2), rows[i][3] === "Missed" ? "Declined" : "Improved");
+  }
+}
+
+function renderBauMtdAdherence_(sheet, monthRows) {
+  renderDashboardSectionTitle_(sheet, 10, 8, 7, "MTD ADHERENCE BY KPI", DASHBOARD_THEME.BLUE);
+  var rows = [["KPI", "MTD Adherence", "Target", "Status"]];
+
+  BAU_METRICS.forEach(function(metric) {
+    var avg = calculateBauMetricMonthAverage_(monthRows, metric);
+    rows.push([metric, formatComplaintPercent_(avg), "100%", avg >= 100 ? "On Target" : "Below Target"]);
+  });
+
+  sheet.getRange(12, 8, rows.length, rows[0].length).setValues(rows);
+  formatDashboardTable_(sheet, 12, 8, rows.length, rows[0].length, DASHBOARD_THEME.SECTION);
+
+  for (var i = 1; i < rows.length; i++) {
+    applyComparisonCellStyle_(sheet.getRange(12 + i, 9), rows[i][3] === "On Target" ? "Improved" : "Declined");
+  }
+}
+
+function getBauHistoryRows_(historyData) {
+  if (!historyData || historyData.length < 2) return [];
+
+  return historyData.slice(1).map(function(row) {
+    var dateKey = normalizeDate_(row[0]);
+    var metrics = {};
+
+    BAU_METRICS.forEach(function(metric, index) {
+      metrics[metric] = toNumber_(row[index + 3]);
+    });
+
+    return {
+      dateKey: dateKey,
+      updatedAt: row[1],
+      dsCode: row[2],
+      metrics: metrics
+    };
+  }).filter(function(row) {
+    return row.dateKey;
+  }).sort(function(a, b) {
+    return a.dateKey.localeCompare(b.dateKey);
+  });
+}
+
+function getLatestBauHistoryRow_(historyRows) {
+  return historyRows.length > 0 ? historyRows[historyRows.length - 1] : null;
+}
+
+function calculateBauRowAverage_(row) {
+  if (!row) return 0;
+
+  var total = 0;
+  BAU_METRICS.forEach(function(metric) {
+    total += toNumber_(row.metrics[metric]);
+  });
+
+  return BAU_METRICS.length > 0 ? total / BAU_METRICS.length : 0;
+}
+
+function calculateBauMonthAverage_(monthRows) {
+  if (!monthRows || monthRows.length === 0) return 0;
+
+  var total = 0;
+  monthRows.forEach(function(row) {
+    total += calculateBauRowAverage_(row);
+  });
+
+  return total / monthRows.length;
+}
+
+function calculateBauMetricMonthAverage_(monthRows, metric) {
+  if (!monthRows || monthRows.length === 0) return 0;
+
+  var total = 0;
+  monthRows.forEach(function(row) {
+    total += toNumber_(row.metrics[metric]);
+  });
+
+  return total / monthRows.length;
+}
+
+function getMissedBauMetrics_(row) {
+  var missed = [];
+
+  BAU_METRICS.forEach(function(metric) {
+    var value = toNumber_(row.metrics[metric]);
+    if (value < 100) {
+      missed.push({
+        metric: metric,
+        value: value
+      });
+    }
+  });
+
+  return missed;
+}
+
+function calculateBauMetricAverage_(rows, columnIndex) {
+  var total = 0;
+  var count = 0;
+
+  rows.forEach(function(row) {
+    var value = parseBauMetricValue_(row[columnIndex]);
+    if (value !== null) {
+      total += value;
+      count++;
+    }
+  });
+
+  return count > 0 ? round2_(total / count) : 0;
+}
+
+function parseBauMetricValue_(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") return value > 0 && value <= 1 ? value * 100 : value;
+
+  var text = normalizeText_(value).replace("%", "");
+  if (normalizeForCompare_(text) === "yes" || normalizeForCompare_(text) === "met") return 100;
+  if (normalizeForCompare_(text) === "no" || normalizeForCompare_(text) === "missed") return 0;
+
+  var number = Number(text);
+  return isNaN(number) ? null : number;
+}
+
+function buildHeaderColumnMap_(header) {
+  var map = {};
+
+  header.forEach(function(name, index) {
+    map[normalizeForCompare_(name)] = index;
+  });
+
+  return map;
+}
+
+function getRequiredColumnIndex_(columnMap, headerName) {
+  var key = normalizeForCompare_(headerName);
+  if (columnMap[key] === undefined) {
+    throw new Error("Missing required BAU source column: " + headerName);
+  }
+
+  return columnMap[key];
+}
+
+function formatBauHistorySheet_(sheet) {
+  var lastRow = sheet.getLastRow();
+  var lastColumn = sheet.getLastColumn();
+  if (lastRow < 1 || lastColumn < 1) return;
+
+  sheet.getRange(1, 1, lastRow, lastColumn)
+    .setFontFamily("Arial")
+    .setFontSize(10)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle")
+    .setBorder(true, true, true, true, true, true, DASHBOARD_THEME.BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  sheet.getRange(1, 1, 1, lastColumn)
+    .setBackground(DASHBOARD_THEME.SECTION)
+    .setFontColor(DASHBOARD_THEME.PRIMARY_TEXT)
+    .setFontWeight("bold");
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, lastColumn)
+      .setBackground(DASHBOARD_THEME.CARD)
+      .setFontColor(DASHBOARD_THEME.SECONDARY_TEXT);
+  }
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, Math.min(lastColumn, 15));
 }
 
 function updateDarkStoreDashboard() {
