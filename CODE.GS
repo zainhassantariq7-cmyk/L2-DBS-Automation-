@@ -960,6 +960,7 @@ function resetDashboardSheet_(sheet) {
   sheet.getCharts().forEach(function(chart) {
     sheet.removeChart(chart);
   });
+  sheet.setFrozenRows(0);
   sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).breakApart();
   sheet.clear();
   ensureSheetSize_(sheet, GRAPH_LAYOUT.DASHBOARD_MIN_ROWS, GRAPH_LAYOUT.DASHBOARD_MIN_COLUMNS);
@@ -979,6 +980,7 @@ function prepareGraphsSheet_(sheet) {
 }
 
 function prepareDarkStoreDataSheet_(sheet) {
+  sheet.setFrozenRows(0);
   sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).breakApart();
   sheet.clear();
   ensureSheetSize_(sheet, GRAPH_LAYOUT.DATA_MIN_ROWS, GRAPH_LAYOUT.DATA_MIN_COLUMNS);
