@@ -59,18 +59,28 @@ var POC_NAME_ALIASES = {
 };
 
 var DEFAULT_POC_MAPPINGS = [
-  ["Md Kamal Ahmed", "Kamal", "Kamal Team", true],
-  ["MD Rakib Hossan", "Kamal", "Kamal Team", true],
-  ["MD Sobuj", "Kamal", "Kamal Team", true],
-  ["MD Anik", "Kamal", "Kamal Team", true],
-  ["Md Minhaj Abedin", "Minhaj", "Minhaj Team", true],
-  ["Emamul Hok", "Minhaj", "Minhaj Team", true],
-  ["Md Shimul", "Minhaj", "Minhaj Team", true],
-  ["Sunbim Sarid Moon", "Minhaj", "Minhaj Team", true],
-  ["Md Apon Ahmed", "Minhaj", "Minhaj Team", true],
-  ["Md Tawhid", "Tawhid", "Tawhid Team", true],
-  ["Jabbarul Islam", "Tawhid", "Tawhid Team", true],
-  ["Saikat Sohhain Bhuiyan", "Tawhid", "Tawhid Team", true]
+  ["Md Kamal Ahmed", "Md Kamal Ahmed", "Kamal", "Kamal Team", true],
+  ["Mohammed Kamal Ahmed", "Md Kamal Ahmed", "Kamal", "Kamal Team", true],
+  ["MD Rakib Hossan", "MD Rakib Hossan", "Kamal", "Kamal Team", true],
+  ["MD RAKIB HOSSAN", "MD Rakib Hossan", "Kamal", "Kamal Team", true],
+  ["Rakib Hassan", "MD Rakib Hossan", "Kamal", "Kamal Team", true],
+  ["MD Sobuj", "MD Sobuj", "Kamal", "Kamal Team", true],
+  ["MD Anik", "MD Anik", "Kamal", "Kamal Team", true],
+  ["Md Obaydur Rahman Anik", "MD Anik", "Kamal", "Kamal Team", true],
+  ["Md.Minhaz Abedin", "Md.Minhaz Abedin", "Minhaj", "Minhaj Team", true],
+  ["Minah Abeddin", "Md.Minhaz Abedin", "Minhaj", "Minhaj Team", true],
+  ["Emamul Hok", "Emamul Hok", "Minhaj", "Minhaj Team", true],
+  ["Tushar Imran", "Emamul Hok", "Minhaj", "Minhaj Team", true],
+  ["Md Shimul", "Md Shimul", "Minhaj", "Minhaj Team", true],
+  ["Sunbim Sarid Moon", "Sunbim Sarid Moon", "Minhaj", "Minhaj Team", true],
+  ["Md Apon Ahmed", "Md Apon Ahmed", "Minhaj", "Minhaj Team", true],
+  ["Mohammad Tutul", "Md Apon Ahmed", "Minhaj", "Minhaj Team", true],
+  ["Md Tawhid", "Md Tawhid", "Tawhid", "Tawhid Team", true],
+  ["Jabbarul Islam", "Jabbarul Islam", "Tawhid", "Tawhid Team", true],
+  ["Zain Hassan", "Jabbarul Islam", "Tawhid", "Tawhid Team", true],
+  ["Saikat Sohhain Bhuiyan", "Saikat Sohhain Bhuiyan", "Tawhid", "Tawhid Team", true],
+  ["SAIKAT SOHHAIN", "Saikat Sohhain Bhuiyan", "Tawhid", "Tawhid Team", true],
+  ["Md Saidur", "Saikat Sohhain Bhuiyan", "Tawhid", "Tawhid Team", true]
 ];
 
 var POC_SCORE_WEIGHTS = {
@@ -307,6 +317,7 @@ function updateRawDatabase() {
 
   clearSheetContents_(destSheet, 1, 1, Math.max(destSheet.getLastRow(), 1), 12);
   destSheet.getRange(1, 1, output.length, output[0].length).setValues(output);
+  writePocMappingValidation_(ensurePocMappingSheet_(destSS), dataRows, pocMapping);
 }
 
 function updateRdbHourly() {
@@ -551,20 +562,62 @@ function updatePocPerformanceSystem_(spreadsheet, mtdSheet, pickerRows, monthKey
 
 function ensurePocMappingSheet_(spreadsheet) {
   var sheet = getOrCreateSheet_(spreadsheet, CONFIG.SHEETS.POC_MAPPING);
-  var header = ["Picker Name", "POC", "Team", "Active"];
+  var header = ["Employee Name", "Canonical Name", "POC", "Team", "Active"];
 
   if (sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, header.length).setValues([header]);
     sheet.getRange(2, 1, DEFAULT_POC_MAPPINGS.length, header.length).setValues(DEFAULT_POC_MAPPINGS);
-  } else if (normalizeText_(sheet.getRange(1, 1).getValue()) !== "Picker Name") {
-    sheet.insertRowsBefore(1, 1);
-    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+  } else if (normalizeText_(sheet.getRange(1, 1).getValue()) !== "Employee Name") {
+    upgradePocMappingSheet_(sheet);
   } else if (sheet.getLastRow() < 2) {
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
     sheet.getRange(2, 1, DEFAULT_POC_MAPPINGS.length, header.length).setValues(DEFAULT_POC_MAPPINGS);
   }
 
+  appendMissingDefaultPocMappings_(sheet);
   sheet.hideSheet();
   return sheet;
+}
+
+function upgradePocMappingSheet_(sheet) {
+  var oldValues = sheet.getDataRange().getValues();
+  var header = ["Employee Name", "Canonical Name", "POC", "Team", "Active"];
+  var upgradedRows = [header];
+
+  for (var i = 1; i < oldValues.length; i++) {
+    var employee = normalizeText_(oldValues[i][0]);
+    var poc = normalizePocName_(oldValues[i][1]);
+    var team = normalizeText_(oldValues[i][2]);
+    var active = oldValues[i][3] === true || normalizeForCompare_(oldValues[i][3]) === "true" || normalizeText_(oldValues[i][3]) === "1";
+
+    if (employee) {
+      upgradedRows.push([employee, getCanonicalEmployeeName_(employee), poc, team, active]);
+    }
+  }
+
+  sheet.clear();
+  sheet.getRange(1, 1, upgradedRows.length, header.length).setValues(upgradedRows);
+}
+
+function appendMissingDefaultPocMappings_(sheet) {
+  var data = sheet.getDataRange().getValues();
+  var existing = {};
+  var rowsToAppend = [];
+
+  for (var i = 1; i < data.length; i++) {
+    existing[normalizeEmployeeNameForMatch_(data[i][0])] = true;
+  }
+
+  DEFAULT_POC_MAPPINGS.forEach(function(row) {
+    var key = normalizeEmployeeNameForMatch_(row[0]);
+    if (!existing[key]) {
+      rowsToAppend.push(row);
+    }
+  });
+
+  if (rowsToAppend.length > 0) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
+  }
 }
 
 function ensurePocManualInputSheet_(spreadsheet) {
@@ -599,12 +652,16 @@ function getPocMapping_(sheet) {
   var data = sheet.getDataRange().getValues();
 
   for (var i = 1; i < data.length; i++) {
-    var picker = normalizeText_(data[i][0]);
-    var poc = normalizePocName_(data[i][1]);
-    var active = data[i][3] === true || normalizeForCompare_(data[i][3]) === "true" || normalizeText_(data[i][3]) === "1";
+    var employee = normalizeText_(data[i][0]);
+    var canonical = normalizeText_(data[i][1]) || getCanonicalEmployeeName_(employee);
+    var poc = normalizePocName_(data[i][2]);
+    var active = data[i][4] === true || normalizeForCompare_(data[i][4]) === "true" || normalizeText_(data[i][4]) === "1";
 
-    if (picker && poc && active) {
-      mapping[normalizeForCompare_(picker)] = poc;
+    if (employee && poc && active) {
+      mapping[normalizeEmployeeNameForMatch_(employee)] = {
+        canonical: canonical,
+        poc: poc
+      };
     }
   }
 
@@ -612,7 +669,59 @@ function getPocMapping_(sheet) {
 }
 
 function getPocForPicker_(picker, mapping) {
-  return normalizePocName_(mapping[normalizeForCompare_(picker)] || "Unassigned");
+  var mapped = mapping[normalizeEmployeeNameForMatch_(picker)];
+  return mapped ? normalizePocName_(mapped.poc) : "Unassigned";
+}
+
+function getCanonicalEmployeeForPicker_(picker, mapping) {
+  var mapped = mapping[normalizeEmployeeNameForMatch_(picker)];
+  return mapped ? mapped.canonical : "";
+}
+
+function normalizeEmployeeNameForMatch_(name) {
+  return normalizeForCompare_(String(name || "").replace(/[.\-_/]+/g, " "));
+}
+
+function getCanonicalEmployeeName_(employee) {
+  var key = normalizeEmployeeNameForMatch_(employee);
+
+  for (var i = 0; i < DEFAULT_POC_MAPPINGS.length; i++) {
+    if (normalizeEmployeeNameForMatch_(DEFAULT_POC_MAPPINGS[i][0]) === key) {
+      return DEFAULT_POC_MAPPINGS[i][1];
+    }
+  }
+
+  return normalizeText_(employee);
+}
+
+function writePocMappingValidation_(sheet, rdbRows, mapping) {
+  var pickerLookup = {};
+  var validationRows = [["Employee Name", "Canonical Name", "POC"]];
+  var unmatchedRows = [["Unmatched Employee Name"]];
+
+  rdbRows.forEach(function(row) {
+    var picker = normalizeText_(row[1]);
+    if (picker) pickerLookup[picker] = true;
+  });
+
+  Object.keys(pickerLookup).sort().forEach(function(picker) {
+    var poc = getPocForPicker_(picker, mapping);
+    var canonical = getCanonicalEmployeeForPicker_(picker, mapping);
+
+    if (poc === "Unassigned") {
+      unmatchedRows.push([picker]);
+    } else {
+      validationRows.push([picker, canonical, poc]);
+    }
+  });
+
+  var startColumn = 7;
+  var maxRows = Math.max(sheet.getMaxRows(), validationRows.length + unmatchedRows.length + 5);
+  sheet.getRange(1, startColumn, maxRows, 5).clearContent();
+  sheet.getRange(1, startColumn).setValue("POC_MAPPING VALIDATION");
+  sheet.getRange(2, startColumn, validationRows.length, validationRows[0].length).setValues(validationRows);
+  sheet.getRange(validationRows.length + 4, startColumn).setValue("UNMATCHED EMPLOYEES");
+  sheet.getRange(validationRows.length + 5, startColumn, unmatchedRows.length, unmatchedRows[0].length).setValues(unmatchedRows);
 }
 
 function normalizePocName_(poc) {
